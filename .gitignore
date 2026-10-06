@@ -1,0 +1,19 @@
+# Local working folders
+_backup/
+stream_new/
+
+# Backups and logs
+*.bak
+*.old
+*.orig
+*.log
+
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
