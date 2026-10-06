@@ -18,12 +18,14 @@ while an Outlast-style monster hunts them through the building.
   make noise it will come to investigate.
 - **Hiding spots.** Hide in lockers or under beds and peek out. If it saw you
   get in, it will drag you out.
-- **Camcorder night vision.** See in the dark without being seen, at the cost of
-  battery shared with the flashlight.
-- **Difficulty.** Choose Easy or Hard on the content warning. Hard spawns two
-  sprinting monsters (sometimes three) that see and hear further and react faster.
+- **Difficulty.** Choose Easy, Hard or EXTREME on the content warning. Hard spawns
+  two sprinting monsters (sometimes three) that see and hear further and react faster.
+  Extreme spawns three or four, needs up to 12 fuses, allows only 3 catches and gives
+  you 2 minutes to escape.
 - **Taser roulette.** Each run you might get a full taser, one with only 2
-  charges, or none at all. Hard rolls the worse outcomes more often.
+  charges, or none at all. Harder modes roll the worse outcomes more often.
+- **Fight back.** Shine the torch in its face to make it recoil, or punch it
+  (normal GTA melee) to knock it down for a few seconds. Both have a cooldown.
 - **Surviving without a taser.** No-taser runs give you throwable bottles that
   lure the monster to the noise, an adrenaline burst when it gets close, and a
   monster that's a little slower and gives up the chase sooner.
@@ -34,16 +36,35 @@ while an Outlast-style monster hunts them through the building.
   given by the server.
 - **Stats and chat titles.** The server keeps each player's lifetime stats and
   unlocks chat titles for milestones and challenge runs.
-- **Objectives.** Between 3 and 6 real fuses are hidden among decoys, then
-  there's a timed escape through one real exit out of five.
+- **Objectives.** Real fuses are hidden among identical dead ones (3–6 on Easy, up
+  to 10 on Hard, up to 12 on Extreme), then there's a timed escape through one real
+  exit out of five. A wrong door teleports you away from every exit, jams shut for
+  the rest of the run, locks all doors for a few seconds and, during the escape,
+  costs you time.
+- **Caught cutscenes.** Human monsters drag you away down the corridor; dogs pin
+  you to the floor.
+- **Private runs.** Each player is put in their own routing bucket during a run, so
+  players in the event can't see each other.
+- **Run summary and leaderboard.** Every run ends with a summary card: time, catches,
+  fuses, item found, leaderboard rank, personal best and any titles unlocked.
+  `/horrortop` shows the fastest escapes per difficulty.
+- **Accessibility.** The warning screen has a reduce-flashing toggle and a scare
+  volume slider. Your choices and last difficulty are remembered.
+- **Atmosphere.** Dim fluorescent lights that stutter
+  and die, occasional power surges, red emergency lights by the exits and faint red
+  eyes on a monster that's hunting you.
+- **Quality of life.** A dark vignette and faint growls warn you when something is
+  close behind you, whispers hint at where to look if you're stuck, and dead fuses
+  keep a dim red glint so you don't go back to them.
 - **Cinematic intro.** Letterboxed shots of the monster, a fuse, the control
   panel and the exit, with captions. Players can skip it.
 - **Jumpscares.** A full-screen catch scare with a chance of a second one in the
   dark.
 - **Five monster variants.** Three zombies and two zombie dogs, picked at random
   each round.
-- **Modern UI.** NUI content warning, captions, camcorder overlay and hiding
-  overlays.
+- **Modern UI.** NUI content warning, a clean HUD panel with objective, catches,
+  battery, stamina and taser status, cinematic captions, hiding overlays and a
+  cinematic end screen.
 - **Per-player.** The monster and props are local to each player, so several
   people can run the event at the same time.
 
@@ -73,12 +94,13 @@ The entrance appears on the map as a red blip at the hospital.
 | `E` | Enter the event, pick up fuses, search, repair, try exits, hide |
 | `TAB` | Swap between flashlight and stun gun |
 | `G` | Throw a bottle (no-taser runs only) |
-| `N` | Camcorder night vision (rebindable in Settings › Key Bindings › FiveM) |
+| `R` / `Left click` | Punch, which knocks the monster down for a few seconds |
+| `Backspace` | Close the end screen |
 | `CTRL` | Crouch, which makes you quieter and harder to see |
 | `Right mouse` | Aim the flashlight |
 | `Space` | Skip the intro |
 | `Enter` / `Esc` | Accept or decline the content warning |
-| `←` / `→` | Choose Easy or Hard on the content warning |
+| `←` / `→` | Choose the difficulty on the content warning |
 
 1. Collect the required number of **glowing** fuses. The dimmer ones are decoys,
    and searching them makes noise.
@@ -99,6 +121,8 @@ five catches, the event is over.
 | `/horrorspot low` | Same, for under-a-bed style spots |
 | `/horroreggspot` | Add an easter egg spot where you're standing |
 | `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
+| `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
+| `/horrordragtest` | Testing only, with `/horrordebug` on: replay the caught cutscene with the nearest monster |
 | `/horrordebug` | Testing only: the monsters ignore you, and hiding and egg spots are shown as markers. Runs with debug on don't count towards stats or rewards |
 
 `/horrorspot` and `/horroreggspot` add the spot for the current session and
@@ -119,11 +143,17 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `HeadStartSeconds`, `EscapeTimeSeconds`, `RepairSeconds` | Timers |
 | `MonsterPatrolSpeed`, `MonsterChaseSpeed`, `MonsterMaxChaseSpeed`, `SpeedRampSeconds` | Monster speed |
 | `Hunter` | Sight and hearing ranges, noise radii, search and investigate behaviour |
-| `DefaultDifficulty`, `Difficulty` | Easy and Hard settings: monster count, speed, senses and taser odds |
+| `DefaultDifficulty`, `Difficulty` | Easy, Hard and Extreme settings: monster count, fuses, catches, escape time, speed, senses and taser odds |
+| `Stun` | Torch and punch stun range, duration and cooldown |
+| `DragCutscene` | Caught cutscenes on or off, length, captions and positioning |
+| `Assist` | Behind-you warning range and stuck-hint timings |
+| `WrongDoor` | Door lockout, escape time penalty and how far from the exits a wrong door sends you |
+| `FuseGlow` | How far and how strongly the real fuses glow |
+| `FirstPerson` | How much wider the first-person view is during the run (restored afterwards) |
+| `Atmosphere` | Flickering ceiling lights, power surges, emergency lights, monster eyes and the scream cooldown |
 | `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
 | `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |
 | `HidingSpots` | Hiding spot list |
-| `NightVision` | Night vision on or off, and battery drain |
 | `Jumpscare` | Volume, strobe, rumble and double-scare chance |
 | `ShowContentWarning`, `PlayIntroCutscene`, `CutsceneRevealsExit`, `AllowCutsceneSkip` | Intro and warning options |
 
@@ -131,15 +161,16 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 
 | Model | Type |
 | --- | --- |
-| `u_m_y_zombie_01` | Zombie (replaces the vanilla GTA zombie's look) |
 | `u_m_y_zombie_02` | Zombie |
 | `u_m_y_zombie_03` | Zombie |
-| `u_m_y_zombie_04` | Zombie dog |
+| `u_m_y_zombie_04` | Zombie |
 | `u_m_y_zombie_05` | Zombie dog |
+| `u_m_y_zombie_06` | Zombie dog |
 
-The model files live in `stream/`. `peds.meta` registers models 02 to 05, and
-model 01 replaces the built-in one, so it doesn't need an entry. Each model needs
-its `.ydd`, `.yft`, `.ymt` and `.ytd`.
+The model files live in `stream/` and `peds.meta` registers all five. The numbering
+starts at 02 on purpose: `u_m_y_zombie_01` is GTA's own zombie, and leaving it alone
+avoids clashing with other resources that replace it. Each model needs its `.ydd`,
+`.yft`, `.ymt` and `.ytd`.
 
 To add your own model, put its files in `stream/`, add an entry to `peds.meta`,
 and add its name to `Config.MonsterModels`. If it's a four-legged model, add it
@@ -156,27 +187,25 @@ summary for impossible numbers, keeps lifetime stats and awards rewards.
 
 ### Chat titles
 
-| Title | Requirement |
-| --- | --- |
-| Night Shift | Enter the Morgue Horror Event |
-| Morgue Rat | Escape the morgue x10 |
-| Coroner | Escape the morgue x100 |
-| Double Shift | Escape on Hard x25 |
-| Toe Tag | Get caught x100 |
-| Fuse Box | Collect x500 real fuses |
-| Shock Therapy | Stun the monster x250 |
-| Lights Out | Lure a monster away with a thrown bottle x50 |
-| Teddy's Keeper | Find the worn teddy bear x10 |
-| Lost Property | Find every easter egg item |
-| Off the Record | Find a Staff Note in the morgue |
-| Body Bag Dodger | Escape without being caught once |
-| Unplugged | Escape a run where you spawned with no taser |
-| Three's a Crowd | Escape on Hard with three monsters hunting you |
-| Last Breath | Escape with 4/5 catches used |
-| Locker Ghost | Escape on Hard without being caught or firing a taser |
-| Patient Zero | Escape on Hard with no taser, without being caught |
+| Title | Colour | Requirement |
+| --- | --- | --- |
+| Night Shift | `#7FB8A4` morgue teal | Enter the Morgue Horror Event |
+| Morgue Rat | `#C97B3D` rust | Escape the morgue x10 |
+| Lost Property | `#D9B45A` old gold | Find every easter egg item |
+| Body Bag Dodger | `#6EC1E4` ice blue | Escape without being caught once |
+| The Unkillable | `#D7263D` blood red | Escape on Extreme without being caught |
 
 The list is the `Titles` table at the top of the server file.
+
+### Leaderboard and private runs
+
+The server keeps the ten fastest escapes per difficulty (one entry per player) and
+each player's personal best. Times are measured by the server, and debug runs never
+count.
+
+During a run each player is moved into their own routing bucket (`BucketBase` plus
+their server ID, 7000 by default) and returned to their previous bucket afterwards.
+Set `UseRoutingBuckets = false` at the top of the server file to turn this off.
 
 ### Hooking it into your server
 
@@ -195,7 +224,8 @@ console. Other resources can use:
 ```lua
 exports['ls-horror']:GetHorrorStats(source)
 exports['ls-horror']:GetHorrorTitles()
-AddEventHandler('horror:titleEarned', function(source, id, name) end)
+exports['ls-horror']:GetHorrorLeaderboard('easy')
+AddEventHandler('horror:titleEarned', function(source, id, name, colour) end)
 ```
 
 When a player is caught for the last time, the client also fires

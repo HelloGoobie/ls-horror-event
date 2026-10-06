@@ -1,52 +1,50 @@
 local MinSecondsIntoRun = 30
 local MinEscapeSeconds = 60
 local MaxCatches = 5
+local UseRoutingBuckets = true
+local BucketBase = 7000
 local runs = {}
+local buckets = {}
+
+-- ============================================================
+-- ROUTING BUCKETS
+-- ============================================================
+local function EnterPrivateBucket(src)
+    if not UseRoutingBuckets or buckets[src] ~= nil then return end
+    buckets[src] = GetPlayerRoutingBucket(src)
+    local bucket = BucketBase + src
+    SetRoutingBucketPopulationEnabled(bucket, false)
+    SetPlayerRoutingBucket(src, bucket)
+end
+
+local function LeavePrivateBucket(src)
+    local previous = buckets[src]
+    if previous == nil then return end
+    buckets[src] = nil
+    if GetPlayerName(src) then
+        SetPlayerRoutingBucket(src, previous)
+    end
+end
 
 -- ============================================================
 -- TITLES
 -- ============================================================
 local Titles = {
-    { id = 'night_shift',     name = 'Night Shift',          desc = 'Enter the Morgue Horror Event',
+    { id = 'night_shift',     name = 'Night Shift',     colour = '#7FB8A4', desc = 'Enter the Morgue Horror Event',
       check = function(s) return s.entered >= 1 end },
-    { id = 'morgue_rat',      name = 'Morgue Rat',           desc = 'Escape the morgue x10',
+    { id = 'morgue_rat',      name = 'Morgue Rat',      colour = '#C97B3D', desc = 'Escape the morgue x10',
       check = function(s) return s.escapes >= 10 end },
-    { id = 'coroner',         name = 'Coroner',              desc = 'Escape the morgue x100',
-      check = function(s) return s.escapes >= 100 end },
-    { id = 'double_shift',    name = 'Double Shift',         desc = 'Escape on Hard x25',
-      check = function(s) return s.hardEscapes >= 25 end },
-    { id = 'toe_tag',         name = 'Toe Tag',              desc = 'Get caught x100',
-      check = function(s) return s.caught >= 100 end },
-    { id = 'fuse_box',        name = 'Fuse Box',             desc = 'Collect x500 real fuses',
-      check = function(s) return s.fuses >= 500 end },
-    { id = 'shock_therapy',   name = 'Shock Therapy',        desc = 'Stun the monster x250',
-      check = function(s) return s.stuns >= 250 end },
-    { id = 'lights_out',      name = 'Lights Out',           desc = 'Lure a monster away with a thrown bottle x50',
-      check = function(s) return s.lures >= 50 end },
-    { id = 'teddys_keeper',   name = "Teddy's Keeper",       desc = 'Find the worn teddy bear x10',
-      check = function(s) return (s.items.teddy or 0) >= 10 end },
-    { id = 'lost_property',   name = 'Lost Property',        desc = 'Find every easter egg item',
+    { id = 'lost_property',   name = 'Lost Property',   colour = '#D9B45A', desc = 'Find every easter egg item',
       check = function(s)
           for _, id in ipairs({ 'staffcard', 'batteries', 'teddy', 'stunpack', 'tape' }) do
               if (s.items[id] or 0) < 1 then return false end
           end
           return true
       end },
-    { id = 'off_the_record',  name = 'Off the Record',       desc = 'Find a Staff Note in the morgue',
-      check = function(s) return s.staffNotes >= 1 end },
-
-    { id = 'body_bag_dodger', name = 'Body Bag Dodger',      desc = 'Escape without being caught once',
+    { id = 'body_bag_dodger', name = 'Body Bag Dodger', colour = '#6EC1E4', desc = 'Escape without being caught once',
       run = function(r) return r.escaped and r.caught == 0 end },
-    { id = 'unplugged',       name = 'Unplugged',            desc = 'Escape a run where you spawned with no taser',
-      run = function(r) return r.escaped and r.startedNoTaser end },
-    { id = 'threes_a_crowd',  name = "Three's a Crowd",      desc = 'Escape on Hard with three monsters hunting you',
-      run = function(r) return r.escaped and r.difficulty == 'hard' and r.monsters >= 3 end },
-    { id = 'last_breath',     name = 'Last Breath',          desc = 'Escape with 4/5 catches used',
-      run = function(r) return r.escaped and r.caught >= MaxCatches - 1 end },
-    { id = 'locker_ghost',    name = 'Locker Ghost',         desc = 'Escape on Hard without being caught or firing a taser',
-      run = function(r) return r.escaped and r.difficulty == 'hard' and r.caught == 0 and r.tasersFired == 0 end },
-    { id = 'patient_zero',    name = 'Patient Zero',         desc = 'Escape on Hard with no taser, without being caught',
-      run = function(r) return r.escaped and r.difficulty == 'hard' and r.startedNoTaser and r.caught == 0 end },
+    { id = 'the_unkillable',  name = 'The Unkillable',  colour = '#D7263D', desc = 'Escape on Extreme without being caught',
+      run = function(r) return r.escaped and r.difficulty == 'extreme' and r.caught == 0 end },
 }
 
 local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, staffnote = true }
@@ -73,7 +71,7 @@ end
 
 local function GiveTitle(src, title)
     -- TODO(Transport Tycoon): replace this with the call that unlocks a chat title.
-    print(('[HORROR] %s (%d) earned the chat title "%s" - placeholder, nothing was given'):format(GetPlayerName(src) or '?', src, title.name))
+    print(('[HORROR] %s (%d) earned the chat title "%s" (%s) - placeholder, nothing was given'):format(GetPlayerName(src) or '?', src, title.name, title.colour))
     return true
 end
 
@@ -90,6 +88,7 @@ local function Defaults(s)
     s.entered     = s.entered or 0
     s.escapes     = s.escapes or 0
     s.hardEscapes = s.hardEscapes or 0
+    s.extremeEscapes = s.extremeEscapes or 0
     s.caught      = s.caught or 0
     s.fuses       = s.fuses or 0
     s.stuns       = s.stuns or 0
@@ -97,6 +96,7 @@ local function Defaults(s)
     s.staffNotes  = s.staffNotes or 0
     s.items       = s.items or {}
     s.titles      = s.titles or {}
+    s.best        = s.best or {}
     return s
 end
 
@@ -114,7 +114,7 @@ local function CheckTitles(src, stats, run)
             if ok and GiveTitle(src, t) then
                 stats.titles[t.id] = os.time()
                 table.insert(earned, t)
-                TriggerEvent('horror:titleEarned', src, t.id, t.name)
+                TriggerEvent('horror:titleEarned', src, t.id, t.name, t.colour)
             end
         end
     end
@@ -123,6 +123,52 @@ local function CheckTitles(src, stats, run)
             TriggerClientEvent('horror:notify', src, ('~y~CHAT TITLE UNLOCKED:~s~ %s~n~~c~%s'):format(t.name, t.desc), 7000)
         end)
     end
+    return earned
+end
+
+-- ============================================================
+-- LEADERBOARD
+-- ============================================================
+local BoardSize = 10
+local Difficulties = { easy = true, hard = true, extreme = true }
+
+local function LoadBoard(diff)
+    local raw = GetResourceKvpString('board:' .. diff)
+    local ok, data = pcall(json.decode, raw or '')
+    return (ok and type(data) == 'table') and data or {}
+end
+
+local function SaveBoard(diff, board)
+    SetResourceKvp('board:' .. diff, json.encode(board))
+end
+
+local function SubmitTime(src, diff, seconds)
+    local key = PlayerKey(src)
+    local board = LoadBoard(diff)
+    local existing
+    for _, e in ipairs(board) do
+        if e.key == key then existing = e break end
+    end
+    if existing then
+        if seconds < existing.seconds then
+            existing.seconds = seconds
+            existing.name = GetPlayerName(src) or existing.name
+            existing.date = os.date('%Y-%m-%d')
+        end
+    else
+        table.insert(board, { key = key, name = GetPlayerName(src) or 'Unknown', seconds = seconds, date = os.date('%Y-%m-%d') })
+    end
+    table.sort(board, function(a, b) return a.seconds < b.seconds end)
+    while #board > BoardSize do table.remove(board) end
+    SaveBoard(diff, board)
+    for i, e in ipairs(board) do
+        if e.key == key then return i end
+    end
+    return nil
+end
+
+local function FormatTime(seconds)
+    return ('%d:%02d'):format(math.floor(seconds / 60), seconds % 60)
 end
 
 local function Num(v, max)
@@ -136,11 +182,11 @@ local function CleanSummary(src, raw, run)
     local seconds = os.time() - run.started
     local r = {
         escaped        = raw.escaped == true and seconds >= MinEscapeSeconds,
-        difficulty     = raw.difficulty == 'hard' and 'hard' or 'easy',
-        monsters       = Num(raw.monsters, 3),
+        difficulty     = (raw.difficulty == 'hard' or raw.difficulty == 'extreme') and raw.difficulty or 'easy',
+        monsters       = Num(raw.monsters, 4),
         startedNoTaser = raw.startedNoTaser == true,
         caught         = Num(raw.caught, MaxCatches),
-        fuses          = Num(raw.fuses, 9),
+        fuses          = Num(raw.fuses, 12),
         stuns          = Num(raw.stuns, math.floor(seconds / 20) + 2),
         tasersFired    = Num(raw.tasersFired, 999),
         lures          = Num(raw.lures, 5),
@@ -156,6 +202,7 @@ end
 -- ============================================================
 RegisterNetEvent('horror:runStarted', function()
     local src = source
+    EnterPrivateBucket(src)
     runs[src] = { started = os.time(), noteClaimed = false }
     local stats = GetStats(src)
     stats.entered = stats.entered + 1
@@ -165,6 +212,7 @@ end)
 
 RegisterNetEvent('horror:runEnded', function(summary)
     local src = source
+    LeavePrivateBucket(src)
     local run = runs[src]
     runs[src] = nil
     if not run then return end
@@ -172,10 +220,22 @@ RegisterNetEvent('horror:runEnded', function(summary)
     local r = CleanSummary(src, summary, run)
     if not r or r.debug then return end
 
+    local seconds = math.max(0, os.time() - run.started)
     local stats = GetStats(src)
+    local result = { seconds = seconds, escaped = r.escaped, difficulty = r.difficulty, titles = {} }
+    if r.escaped then
+        local prev = stats.best[r.difficulty]
+        result.previousBest = prev
+        if not prev or seconds < prev then
+            stats.best[r.difficulty] = seconds
+            result.personalBest = true
+        end
+        result.rank = SubmitTime(src, r.difficulty, seconds)
+    end
     if r.escaped then
         stats.escapes = stats.escapes + 1
-        if r.difficulty == 'hard' then stats.hardEscapes = stats.hardEscapes + 1 end
+        if r.difficulty ~= 'easy' then stats.hardEscapes = stats.hardEscapes + 1 end
+        if r.difficulty == 'extreme' then stats.extremeEscapes = stats.extremeEscapes + 1 end
     end
     stats.caught = stats.caught + r.caught
     stats.fuses  = stats.fuses + r.fuses
@@ -185,8 +245,11 @@ RegisterNetEvent('horror:runEnded', function(summary)
         stats.items[r.item] = (stats.items[r.item] or 0) + 1
     end
 
-    CheckTitles(src, stats, r)
+    for _, t in ipairs(CheckTitles(src, stats, r)) do
+        table.insert(result.titles, { name = t.name, colour = t.colour })
+    end
     SaveStats(src, stats)
+    TriggerClientEvent('horror:runResult', src, result)
 end)
 
 RegisterNetEvent('horror:staffNoteFound', function()
@@ -212,19 +275,45 @@ RegisterCommand('horrorstats', function(src)
     for _, t in ipairs(Titles) do
         if s.titles[t.id] then table.insert(owned, t.name) end
     end
-    TriggerClientEvent('horror:notify', src, ('Runs: %d  |  Escapes: %d (Hard %d)  |  Caught: %d~n~Fuses: %d  |  Stuns: %d  |  Lures: %d~n~Titles: %s')
-        :format(s.entered, s.escapes, s.hardEscapes, s.caught, s.fuses, s.stuns, s.lures, #owned > 0 and table.concat(owned, ', ') or 'none yet'), 10000)
+    TriggerClientEvent('horror:notify', src, ('Runs: %d  |  Escapes: %d (Hard+ %d, Extreme %d)  |  Caught: %d~n~Fuses: %d  |  Stuns: %d  |  Lures: %d~n~Titles: %s')
+        :format(s.entered, s.escapes, s.hardEscapes, s.extremeEscapes, s.caught, s.fuses, s.stuns, s.lures, #owned > 0 and table.concat(owned, ', ') or 'none yet'), 10000)
 end, false)
 
 AddEventHandler('playerDropped', function()
     runs[source] = nil
+    buckets[source] = nil
 end)
 
+AddEventHandler('onResourceStop', function(name)
+    if name ~= GetCurrentResourceName() then return end
+    for src in pairs(buckets) do
+        LeavePrivateBucket(src)
+    end
+end)
+
+RegisterCommand('horrortop', function(src, args)
+    local diff = (args[1] or 'easy'):lower()
+    if not Difficulties[diff] then diff = 'easy' end
+    local board = LoadBoard(diff)
+    local lines = {}
+    for i = 1, math.min(5, #board) do
+        local e = board[i]
+        table.insert(lines, ('%d. %s  ~y~%s~s~'):format(i, e.name, FormatTime(e.seconds)))
+    end
+    local text = ('~r~FASTEST ESCAPES~s~ (%s)~n~%s'):format(diff:upper(), #lines > 0 and table.concat(lines, '~n~') or 'Nobody has escaped yet.')
+    if src == 0 then
+        print((text:gsub('~n~', '\n'):gsub('~.-~', '')))
+    else
+        TriggerClientEvent('horror:notify', src, text, 12000)
+    end
+end, false)
+
 exports('GetHorrorStats', function(src) return GetStats(src) end)
+exports('GetHorrorLeaderboard', function(diff) return LoadBoard(Difficulties[diff] and diff or 'easy') end)
 exports('GetHorrorTitles', function()
     local list = {}
     for _, t in ipairs(Titles) do
-        table.insert(list, { id = t.id, name = t.name, desc = t.desc })
+        table.insert(list, { id = t.id, name = t.name, colour = t.colour, desc = t.desc })
     end
     return list
 end)
