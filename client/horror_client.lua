@@ -195,7 +195,6 @@ local Config = {
         LightDistance     = 22.0,
         SurgeEverySeconds = { 45, 90 },
         EmergencyLights   = true,
-        MonsterEyes       = true,
         ScreechGapMs      = 8000,
     },
 
@@ -1427,16 +1426,6 @@ function StartAtmosphereLoop(token)
                 end
             end
 
-            if a.MonsterEyes then
-                for _, m in ipairs(monsters) do
-                    if m.state == "CHASE" and m.ped and DoesEntityExist(m.ped) and #(GetEntityCoords(m.ped) - p) < 20.0 then
-                        local f = GetMonsterFace(m.ped)
-                        local fwd = GetEntityForwardVector(m.ped)
-                        local e = f + fwd * 0.12
-                        DrawLightWithRange(e.x, e.y, e.z, 255, 0, 0, 0.45, 0.9)
-                    end
-                end
-            end
             Wait(0)
         end
     end)
