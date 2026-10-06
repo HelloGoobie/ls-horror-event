@@ -183,27 +183,13 @@ summary for impossible numbers, keeps lifetime stats and awards rewards.
 
 ### Chat titles
 
-| Title | Requirement |
-| --- | --- |
-| Night Shift | Enter the Morgue Horror Event |
-| Morgue Rat | Escape the morgue x10 |
-| Coroner | Escape the morgue x100 |
-| Double Shift | Escape on Hard or Extreme x25 |
-| Toe Tag | Get caught x100 |
-| Fuse Box | Collect x500 real fuses |
-| Shock Therapy | Stun the monster x250 |
-| Lights Out | Lure a monster away with a thrown bottle x50 |
-| Teddy's Keeper | Find the worn teddy bear x10 |
-| Lost Property | Find every easter egg item |
-| Off the Record | Find a Staff Note in the morgue |
-| Body Bag Dodger | Escape without being caught once |
-| Unplugged | Escape a run where you spawned with no taser |
-| Three's a Crowd | Escape on Hard or Extreme with three monsters hunting you |
-| Last Breath | Escape with 4/5 catches used |
-| Locker Ghost | Escape on Hard or Extreme without being caught or firing a taser |
-| Patient Zero | Escape on Hard or Extreme with no taser, without being caught |
-| Graveyard Shift | Escape on Extreme |
-| The Unkillable | Escape on Extreme without being caught |
+| Title | Colour | Requirement |
+| --- | --- | --- |
+| Night Shift | `#7FB8A4` morgue teal | Enter the Morgue Horror Event |
+| Morgue Rat | `#C97B3D` rust | Escape the morgue x10 |
+| Lost Property | `#D9B45A` old gold | Find every easter egg item |
+| Body Bag Dodger | `#6EC1E4` ice blue | Escape without being caught once |
+| The Unkillable | `#D7263D` blood red | Escape on Extreme without being caught |
 
 The list is the `Titles` table at the top of the server file.
 
@@ -235,7 +221,7 @@ console. Other resources can use:
 exports['ls-horror']:GetHorrorStats(source)
 exports['ls-horror']:GetHorrorTitles()
 exports['ls-horror']:GetHorrorLeaderboard('easy')
-AddEventHandler('horror:titleEarned', function(source, id, name) end)
+AddEventHandler('horror:titleEarned', function(source, id, name, colour) end)
 ```
 
 When a player is caught for the last time, the client also fires

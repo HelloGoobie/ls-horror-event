@@ -617,7 +617,20 @@
             const ex = $("sumExtra");
             if (d.rank) ex.appendChild(el("div", "line", "#" + d.rank + " on the leaderboard" + (d.personalBest ? "  ·  new personal best!" : "")));
             else if (d.personalBest) ex.appendChild(el("div", "line", "New personal best!"));
-            (d.titles || []).forEach(t => ex.appendChild(el("div", "line title", "Title unlocked: " + t)));
+            (d.titles || []).forEach(t => {
+                const name = typeof t === "string" ? t : t.name;
+                const pill = el("div", "line title", "Title unlocked: ");
+                const b = document.createElement("b");
+                b.textContent = name;
+                if (t && t.colour) {
+                    b.style.color = t.colour;
+                    pill.style.color = "#c9c9d1";
+                    pill.style.borderColor = t.colour + "80";
+                    pill.style.boxShadow = "0 0 18px " + t.colour + "33";
+                }
+                pill.appendChild(b);
+                ex.appendChild(pill);
+            });
         }
         const HUD_DIFF = { easy: ["EASY", "#e5383b"], hard: ["HARD", "#ff3b3f"], extreme: ["EXTREME", "#c77dff"] };
         let hudLast = "";

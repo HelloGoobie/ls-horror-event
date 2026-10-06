@@ -30,49 +30,20 @@ end
 -- TITLES
 -- ============================================================
 local Titles = {
-    { id = 'night_shift',     name = 'Night Shift',          desc = 'Enter the Morgue Horror Event',
+    { id = 'night_shift',     name = 'Night Shift',     colour = '#7FB8A4', desc = 'Enter the Morgue Horror Event',
       check = function(s) return s.entered >= 1 end },
-    { id = 'morgue_rat',      name = 'Morgue Rat',           desc = 'Escape the morgue x10',
+    { id = 'morgue_rat',      name = 'Morgue Rat',      colour = '#C97B3D', desc = 'Escape the morgue x10',
       check = function(s) return s.escapes >= 10 end },
-    { id = 'coroner',         name = 'Coroner',              desc = 'Escape the morgue x100',
-      check = function(s) return s.escapes >= 100 end },
-    { id = 'double_shift',    name = 'Double Shift',         desc = 'Escape on Hard or Extreme x25',
-      check = function(s) return s.hardEscapes >= 25 end },
-    { id = 'toe_tag',         name = 'Toe Tag',              desc = 'Get caught x100',
-      check = function(s) return s.caught >= 100 end },
-    { id = 'fuse_box',        name = 'Fuse Box',             desc = 'Collect x500 real fuses',
-      check = function(s) return s.fuses >= 500 end },
-    { id = 'shock_therapy',   name = 'Shock Therapy',        desc = 'Stun the monster x250',
-      check = function(s) return s.stuns >= 250 end },
-    { id = 'lights_out',      name = 'Lights Out',           desc = 'Lure a monster away with a thrown bottle x50',
-      check = function(s) return s.lures >= 50 end },
-    { id = 'teddys_keeper',   name = "Teddy's Keeper",       desc = 'Find the worn teddy bear x10',
-      check = function(s) return (s.items.teddy or 0) >= 10 end },
-    { id = 'lost_property',   name = 'Lost Property',        desc = 'Find every easter egg item',
+    { id = 'lost_property',   name = 'Lost Property',   colour = '#D9B45A', desc = 'Find every easter egg item',
       check = function(s)
           for _, id in ipairs({ 'staffcard', 'batteries', 'teddy', 'stunpack', 'tape' }) do
               if (s.items[id] or 0) < 1 then return false end
           end
           return true
       end },
-    { id = 'off_the_record',  name = 'Off the Record',       desc = 'Find a Staff Note in the morgue',
-      check = function(s) return s.staffNotes >= 1 end },
-
-    { id = 'body_bag_dodger', name = 'Body Bag Dodger',      desc = 'Escape without being caught once',
+    { id = 'body_bag_dodger', name = 'Body Bag Dodger', colour = '#6EC1E4', desc = 'Escape without being caught once',
       run = function(r) return r.escaped and r.caught == 0 end },
-    { id = 'unplugged',       name = 'Unplugged',            desc = 'Escape a run where you spawned with no taser',
-      run = function(r) return r.escaped and r.startedNoTaser end },
-    { id = 'threes_a_crowd',  name = "Three's a Crowd",      desc = 'Escape on Hard or Extreme with three monsters hunting you',
-      run = function(r) return r.escaped and r.difficulty ~= 'easy' and r.monsters >= 3 end },
-    { id = 'last_breath',     name = 'Last Breath',          desc = 'Escape with 4/5 catches used',
-      run = function(r) return r.escaped and r.caught >= MaxCatches - 1 end },
-    { id = 'locker_ghost',    name = 'Locker Ghost',         desc = 'Escape on Hard or Extreme without being caught or firing a taser',
-      run = function(r) return r.escaped and r.difficulty ~= 'easy' and r.caught == 0 and r.tasersFired == 0 end },
-    { id = 'patient_zero',    name = 'Patient Zero',         desc = 'Escape on Hard or Extreme with no taser, without being caught',
-      run = function(r) return r.escaped and r.difficulty ~= 'easy' and r.startedNoTaser and r.caught == 0 end },
-    { id = 'graveyard_shift', name = 'Graveyard Shift',      desc = 'Escape on Extreme',
-      run = function(r) return r.escaped and r.difficulty == 'extreme' end },
-    { id = 'the_unkillable',  name = 'The Unkillable',       desc = 'Escape on Extreme without being caught',
+    { id = 'the_unkillable',  name = 'The Unkillable',  colour = '#D7263D', desc = 'Escape on Extreme without being caught',
       run = function(r) return r.escaped and r.difficulty == 'extreme' and r.caught == 0 end },
 }
 
@@ -100,7 +71,7 @@ end
 
 local function GiveTitle(src, title)
     -- TODO(Transport Tycoon): replace this with the call that unlocks a chat title.
-    print(('[HORROR] %s (%d) earned the chat title "%s" - placeholder, nothing was given'):format(GetPlayerName(src) or '?', src, title.name))
+    print(('[HORROR] %s (%d) earned the chat title "%s" (%s) - placeholder, nothing was given'):format(GetPlayerName(src) or '?', src, title.name, title.colour))
     return true
 end
 
@@ -143,7 +114,7 @@ local function CheckTitles(src, stats, run)
             if ok and GiveTitle(src, t) then
                 stats.titles[t.id] = os.time()
                 table.insert(earned, t)
-                TriggerEvent('horror:titleEarned', src, t.id, t.name)
+                TriggerEvent('horror:titleEarned', src, t.id, t.name, t.colour)
             end
         end
     end
@@ -275,7 +246,7 @@ RegisterNetEvent('horror:runEnded', function(summary)
     end
 
     for _, t in ipairs(CheckTitles(src, stats, r)) do
-        table.insert(result.titles, t.name)
+        table.insert(result.titles, { name = t.name, colour = t.colour })
     end
     SaveStats(src, stats)
     TriggerClientEvent('horror:runResult', src, result)
@@ -342,7 +313,7 @@ exports('GetHorrorLeaderboard', function(diff) return LoadBoard(Difficulties[dif
 exports('GetHorrorTitles', function()
     local list = {}
     for _, t in ipairs(Titles) do
-        table.insert(list, { id = t.id, name = t.name, desc = t.desc })
+        table.insert(list, { id = t.id, name = t.name, colour = t.colour, desc = t.desc })
     end
     return list
 end)
