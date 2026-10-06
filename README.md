@@ -38,7 +38,9 @@ while an Outlast-style monster hunts them through the building.
   unlocks chat titles for milestones and challenge runs.
 - **Objectives.** Real fuses are hidden among identical dead ones (3–6 on Easy, up
   to 10 on Hard, up to 12 on Extreme), then there's a timed escape through one real
-  exit out of five. The wrong doors teleport you somewhere else in the building.
+  exit out of five. A wrong door teleports you away from every exit, jams shut for
+  the rest of the run, locks all doors for a few seconds and, during the escape,
+  costs you time.
 - **Caught cutscenes.** Human monsters drag you away down the corridor; dogs pin
   you to the floor.
 - **Private runs.** Each player is put in their own routing bucket during a run, so
@@ -145,6 +147,7 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `Stun` | Torch and punch stun range, duration and cooldown |
 | `DragCutscene` | Caught cutscenes on or off, length, captions and positioning |
 | `Assist` | Behind-you warning range and stuck-hint timings |
+| `WrongDoor` | Door lockout, escape time penalty and how far from the exits a wrong door sends you |
 | `FuseGlow` | How far and how strongly the real fuses glow |
 | `FirstPerson` | How much wider the first-person view is during the run (restored afterwards) |
 | `Atmosphere` | Flickering ceiling lights, power surges, emergency lights, monster eyes and the scream cooldown |

@@ -108,6 +108,12 @@ local Config = {
     StunCooldownMs         = 20000,
 
     ExitCooldownMs         = 3000,
+    WrongDoor = {
+        LockSeconds      = 10,
+        TimePenalty      = 20,
+        MinDistFromExits = 10.0,
+        MinDistFromDoor  = 15.0,
+    },
     FlashlightLoseAimDot   = 0.70,
 
     JumpscareTriggerDist   = 3.2,
@@ -388,6 +394,7 @@ local scareVolume = GetResourceKvpInt('horror_scareVolumeSet') == 1 and GetResou
 local summaryUntil = 0
 local meleeSwingId = 0
 local triedExits = {}
+local doorsLockedUntil = 0
 local runStats = nil
 local lastTaserStatShot = 0
 local debugGhost = false
@@ -1128,6 +1135,7 @@ function StartHorrorEvent(chosenDifficulty)
     bottles = (taserMode == 'none') and Config.Unarmed.Bottles or 0
     lastMeleeAt, meleeSwingId = 0, 0
     triedExits = {}
+    doorsLockedUntil = 0
     deadFuses = {}
     exitHintShown = false
     runStats = {
@@ -3933,8 +3941,15 @@ function StartObjectiveLoop(token)
 
                             if IsControlJustReleased(0, 38) and exitCooldown <= 0 then
                                 exitCooldown = Config.ExitCooldownMs
+                                local lockLeft = math.ceil((doorsLockedUntil - GetGameTimer()) / 1000)
 
-                                if i == actualRealExitIndex then
+                                if lockLeft > 0 then
+                                    ShowNotification(("The doors won't budge... (%ds)"):format(lockLeft), 2000)
+                                    PlaySoundFrontend(-1, "OOB_Cancel", "GTAO_FM_Events_Soundset", true)
+                                elseif triedExits[i] then
+                                    ShowNotification("This one's a dead end. It's jammed shut.", 2500)
+                                    PlaySoundFrontend(-1, "OOB_Cancel", "GTAO_FM_Events_Soundset", true)
+                                elseif i == actualRealExitIndex then
                                     if panelRepaired then
                                         EndHorrorEvent(true)
                                         break
@@ -3942,23 +3957,36 @@ function StartObjectiveLoop(token)
                                         ShowNotification("The control panel is offline! Repair it first.", 3000)
                                     end
                                 else
+                                    local wd = Config.WrongDoor
                                     triedExits[i] = true
-                                    ShowNotification("It's a dead end! The door slams shut...", 3000)
+                                    doorsLockedUntil = GetGameTimer() + wd.LockSeconds * 1000
+                                    local penalty = ""
+                                    if panelRepaired and wd.TimePenalty > 0 then
+                                        escapeTimerSeconds = math.max(5, escapeTimerSeconds - wd.TimePenalty)
+                                        penalty = (" You lost %d seconds."):format(wd.TimePenalty)
+                                    end
+                                    ShowNotification("It's a dead end! The door slams shut..." .. penalty, 3500)
                                     MakeNoise(exitPos, Config.Hunter.NoiseDoorSlam)
                                     PlaySoundFrontend(-1, "OOB_Cancel", "GTAO_FM_Events_Soundset", true)
 
                                     DoScreenFadeOut(200)
                                     Wait(500)
 
-                                    local otherIndex = i
-                                    if #Config.ExitPoints > 1 then
-                                        while otherIndex == i do
-                                            otherIndex = math.random(#Config.ExitPoints)
+                                    local landing = {}
+                                    for _, rp in ipairs(Config.PlayerRespawnPoints) do
+                                        local ok = FloorAwareDist(rp.coords, exitPos) >= wd.MinDistFromDoor
+                                        for _, ep in ipairs(Config.ExitPoints) do
+                                            if ok and #(rp.coords - ep.coords) < wd.MinDistFromExits then ok = false end
                                         end
+                                        for _, mm in ipairs(monsters) do
+                                            if ok and DoesEntityExist(mm.ped) and #(rp.coords - GetEntityCoords(mm.ped)) < 10.0 then ok = false end
+                                        end
+                                        if ok then table.insert(landing, rp) end
                                     end
-                                    local other = Config.ExitPoints[otherIndex]
+                                    local dest = #landing > 0 and landing[math.random(#landing)]
+                                        or GetPointAwayFrom(Config.PlayerRespawnPoints, exitPos, wd.MinDistFromDoor)
 
-                                    SafeTeleport(playerPed, other.coords, other.heading)
+                                    SafeTeleport(playerPed, dest.coords, dest.heading)
                                     Wait(500)
                                     DoScreenFadeIn(500)
                                 end
