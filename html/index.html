@@ -155,6 +155,20 @@
         }
 
         .actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+        .diff { margin: 0 0 22px; }
+        .diff-label { font-size: 11px; font-weight: 600; letter-spacing: .16em; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+        .diff-label span { letter-spacing: .06em; font-weight: 400; }
+        .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .seg button {
+            display: block; text-align: left; padding: 12px 14px; border-radius: 12px;
+            background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); color: var(--ink);
+        }
+        .seg button b { display: block; font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+        .seg button small { display: block; font-size: 12px; font-weight: 300; color: var(--muted); line-height: 1.4; }
+        .seg button:hover { border-color: rgba(255, 255, 255, .18); }
+        .seg button.on { border-color: rgba(229, 56, 59, .65); background: rgba(229, 56, 59, .10); box-shadow: 0 0 0 1px rgba(229, 56, 59, .25) inset; }
+        .seg button.on[data-diff="hard"] { background: rgba(229, 56, 59, .18); }
         button {
             display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
             font-family: var(--sans); font-size: 14px; font-weight: 500; letter-spacing: .01em;
@@ -267,6 +281,14 @@
                 </div>
             </div>
 
+            <div class="diff">
+                <div class="diff-label">DIFFICULTY <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> to switch</span></div>
+                <div class="seg">
+                    <button data-diff="easy" class="on"><b>Easy</b><small>One of them. It hunts at a walk until it sees you.</small></button>
+                    <button data-diff="hard"><b>Hard</b><small>Two or more. Faster, sharper senses, and your taser is less reliable.</small></button>
+                </div>
+            </div>
+
             <p class="note">If you're sensitive to any of the above, please take care. You can leave at any time with <code>/stopHorror</code>.</p>
 
             <div class="actions">
@@ -298,9 +320,17 @@
 
         /* ---------------- Warning ---------------- */
         let warningOpen = false;
+        let difficulty = "easy";
 
-        function showWarning() {
+        function setDifficulty(d) {
+            difficulty = d === "hard" ? "hard" : "easy";
+            document.querySelectorAll(".seg button").forEach(b => b.classList.toggle("on", b.dataset.diff === difficulty));
+        }
+        document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => setDifficulty(b.dataset.diff)));
+
+        function showWarning(defaultDiff) {
             warningOpen = true;
+            setDifficulty(defaultDiff || "easy");
             const w = $("warning");
             w.classList.remove("show"); void w.offsetWidth; w.classList.add("show");
             w.setAttribute("aria-hidden", "false");
@@ -314,13 +344,15 @@
         function answerWarning(accepted) {
             if (!warningOpen) return;
             hideWarning();
-            post("warningResult", { accepted });
+            post("warningResult", { accepted, difficulty });
         }
         $("btnAccept").addEventListener("click", () => answerWarning(true));
         $("btnCancel").addEventListener("click", () => answerWarning(false));
         window.addEventListener("keydown", (e) => {
             if (!warningOpen) return;
             if (e.key === "Enter") { e.preventDefault(); answerWarning(true); }
+            else if (e.key === "ArrowLeft") { e.preventDefault(); setDifficulty("easy"); }
+            else if (e.key === "ArrowRight") { e.preventDefault(); setDifficulty("hard"); }
             else if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); answerWarning(false); }
         });
 
@@ -461,7 +493,7 @@
         window.addEventListener("message", (event) => {
             const data = event.data || {};
             switch (data.action) {
-                case "showWarning": showWarning(); break;
+                case "showWarning": showWarning(data.difficulty); break;
                 case "hideWarning": hideWarning(); break;
 
                 case "cineStart":   cineStart(data.skip); break;

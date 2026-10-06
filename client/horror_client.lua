@@ -82,13 +82,13 @@ local Config = {
     ControlPanel = vector3(252.9142, -1361.1176, 29.6494),
 
     FuseProp = 'prop_car_battery_01',
-    FusePropCount = 5,
-    MinFusesRequired = 1,
-    MaxFusesRequired = 5,
+    FusePropCount = 9,
+    MinFusesRequired = 3,
+    MaxFusesRequired = 6,
 
     RepairAnimDict = 'mini@repair',
     RepairAnimName = 'fixing_a_player',
-    RepairSeconds  = 10,
+    RepairSeconds  = 15,
 
     MaxCatches             = 5,
     CatchDistance          = 1.5,
@@ -157,6 +157,64 @@ local Config = {
     },
 
     CatchMode = "drag",
+
+    DefaultDifficulty = 'easy',
+    Difficulty = {
+        easy = {
+            monsters = 1, extraMonsterChance = 0.0,
+            chaseMult = 1.0, patrolMult = 1.0, sightMult = 1.0, hearMult = 1.0, noticeMult = 1.0,
+            taser = { noTaserChance = 0.10, limitedChance = 0.25, limitedShots = 2 },
+        },
+        hard = {
+            monsters = 2, extraMonsterChance = 0.30,
+            chaseMult = 1.15, patrolMult = 1.25, sightMult = 1.25, hearMult = 1.25, noticeMult = 0.7,
+            taser = { noTaserChance = 0.30, limitedChance = 0.40, limitedShots = 2 },
+        },
+    },
+
+    Unarmed = {
+        ChaseMult          = 0.90,
+        LoseSightMs        = 2200,
+        StaminaDrainMult   = 0.70,
+        Bottles            = 3,
+        BottlesWhenDrained = 2,
+        BottleModel        = 'prop_cs_beer_bot_01',
+        ThrowSpeed         = 15.0,
+        BottleNoise        = 22.0,
+        LureMs             = 3500,
+        SecondWind = {
+            Enabled    = true,
+            TriggerDist = 5.0,
+            CooldownMs = 60000,
+            DurationMs = 4500,
+            SprintMult = 1.25,
+        },
+    },
+
+    EasterEggs = {
+        enabled = true,
+        chance  = 1.0,
+        fallbackModels = { 'prop_cs_documents_01', 'prop_ld_case_01', 'prop_paper_bag_small' },
+        extraSpots = {},
+        staffNote = {
+            enabled = true,
+            chance  = 0.05,
+            item = { id = 'staffnote', label = 'Staff Note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
+                     text = 'A Staff Note, tucked away where nobody would look. Lucky you.', effect = 'staffnote' },
+        },
+        items = {
+            { id = 'staffcard', label = 'Staff key card', models = { 'p_ld_id_card_01', 'prop_cs_swipe_card', 'p_ld_id_card_002' },
+              text = "A coroner's key card. Somewhere, a card reader blinks green - the real exit is on your map.", effect = 'revealExit' },
+            { id = 'batteries', label = 'Spare batteries', models = { 'prop_battery_01', 'prop_battery_02' },
+              text = 'Fresh batteries for the flashlight and camcorder. +40% battery.', effect = 'battery', amount = 40 },
+            { id = 'teddy', label = 'Worn teddy bear', models = { 'prop_mr_raspberry_01', 'v_res_r_teddy' },
+              text = "Someone's teddy, left on a cold floor. It feels warm. One catch is forgiven.", effect = 'life' },
+            { id = 'stunpack', label = 'Taser cartridge', models = { 'prop_ld_ammo_pack_01', 'prop_box_ammo07a' },
+              text = 'A spare taser cartridge. Two more shots.', effect = 'taser', amount = 2 },
+            { id = 'tape', label = 'Unlabelled cassette', models = { 'prop_cs_cassette', 'prop_tapeplayer_01' },
+              text = '"...if anyone finds this, don\'t go below the second floor. It counts the fuses..."', effect = 'lore' },
+        },
+    },
     CatchGraceMs = 7000,
 
     HidingSpots = {
@@ -243,6 +301,22 @@ local currentPatrolTarget = nil
 
 local selectedMonsterModelName = nil
 local monsterIsQuadruped = false
+local monsters = {}
+local quadrupedPeds = {}
+local difficulty = 'easy'
+local diff = nil
+local taserMode = 'full'
+local taserShotsLeft = nil
+local lastTaserShot = 0
+local bottles = 0
+local runStats = nil
+local lastTaserStatShot = 0
+local debugGhost = false
+local throwingBottle = false
+local secondWindReadyAt = 0
+local secondWindUntil = 0
+local eggProp, eggItem, eggPos, eggFound = nil, nil, nil, false
+local exitRevealBlip = nil
 local brokenModels = {}
 
 local hadFlashlight = false
@@ -252,6 +326,39 @@ local extraPinned = {}
 
 local function IsSessionActive(token)
     return isEventActive and token == eventSession
+end
+
+local function LiveMonsters()
+    local list = {}
+    for _, m in ipairs(monsters) do
+        if m.ped and DoesEntityExist(m.ped) then table.insert(list, m) end
+    end
+    return list
+end
+
+local function ClosestMonster()
+    local p = GetEntityCoords(PlayerPedId())
+    local best, bestDist = nil, math.huge
+    for _, m in ipairs(LiveMonsters()) do
+        local d = #(GetEntityCoords(m.ped) - p)
+        if d < bestDist then best, bestDist = m, d end
+    end
+    return best, bestDist
+end
+
+local function AnyMonsterInView()
+    for _, m in ipairs(monsters) do
+        if m.inView then return true end
+    end
+    return false
+end
+
+local function Diff()
+    return diff or Config.Difficulty.easy
+end
+
+local function Unarmed()
+    return taserMode == 'none'
 end
 
 function ShowNotification(msg, duration)
@@ -416,12 +523,16 @@ CreateThread(function()
                     local secs = math.floor(escapeTimerSeconds % 60)
                     objective = string.format("~r~Escape: %02d:%02d~s~", mins, secs)
                 end
-                DrawScaledText(0.75, 0.900, 0.38, objective .. string.format("  |  Caught: %d / %d", timesCaught, Config.MaxCatches), 220, 220, 220, 255, 0)
+                DrawScaledText(0.75, 0.900, 0.38, objective .. string.format("  |  Caught: %d / %d  |  %s", timesCaught, Config.MaxCatches, difficulty == 'hard' and '~r~HARD~s~' or 'Easy'), 220, 220, 220, 255, 0)
 
                 local staminaCol = playerExhausted and "~r~" or (playerStamina < 40 and "~o~" or "~s~")
                 local batteryCol = flashlightBattery < 20 and "~r~" or "~s~"
-                local status = string.format("Battery: %s%d%%~s~  |  Stamina: %s%d%%~s~  |  ~b~[TAB]~s~ Swap Tool  |  ~b~[N]~s~ Night Vision  |  ~b~[CTRL]~s~ Crouch",
-                    batteryCol, math.floor(flashlightBattery), staminaCol, math.floor(playerStamina))
+                local taserText = taserMode == 'none' and '~r~No taser~s~' or (taserShotsLeft and ('Taser: ~o~' .. taserShotsLeft .. '~s~') or 'Taser: ~g~OK~s~')
+                if bottles > 0 then
+                    taserText = taserText .. ('  |  ~b~[G]~s~ Bottles: ~y~%d~s~'):format(bottles)
+                end
+                local status = string.format("Battery: %s%d%%~s~  |  Stamina: %s%d%%~s~  |  %s  |  ~b~[TAB]~s~ Swap  |  ~b~[N]~s~ Night Vision  |  ~b~[CTRL]~s~ Crouch",
+                    batteryCol, math.floor(flashlightBattery), staminaCol, math.floor(playerStamina), taserText)
                 DrawScaledText(0.75, 0.930, 0.35, status, 200, 200, 200, 255, 0)
             end
         end
@@ -438,7 +549,7 @@ end)
 -- ============================================================
 local pendingWarningCallback = nil
 
-local function ResolveWarning(accepted)
+local function ResolveWarning(accepted, chosen)
     if not warningOpen then return end
     warningOpen = false
 
@@ -450,18 +561,22 @@ local function ResolveWarning(accepted)
 
     local callback = pendingWarningCallback
     pendingWarningCallback = nil
-    if callback then callback(accepted) end
+    if callback then callback(accepted, chosen) end
 end
+
+RegisterNetEvent('horror:notify', function(msg, ms)
+    ShowNotification(msg, ms or 5000)
+end)
 
 RegisterNUICallback('warningResult', function(data, cb)
     cb({})
-    ResolveWarning(data and data.accepted == true)
+    ResolveWarning(data and data.accepted == true, data and data.difficulty)
 end)
 
 function ShowContentWarningPrompt(onResult)
     if warningOpen then return end
     if not Config.ShowContentWarning then
-        onResult(true)
+        onResult(true, Config.DefaultDifficulty)
         return
     end
 
@@ -471,7 +586,7 @@ function ShowContentWarningPrompt(onResult)
     DisplayRadar(false)
     TriggerScreenblurFadeIn(400)
 
-    SendNUIMessage({ action = "showWarning" })
+    SendNUIMessage({ action = "showWarning", difficulty = Config.DefaultDifficulty })
     SetNuiFocus(true, true)
 end
 
@@ -485,9 +600,9 @@ local function RequestStartHorrorEvent()
         return
     end
 
-    ShowContentWarningPrompt(function(accepted)
+    ShowContentWarningPrompt(function(accepted, chosen)
         if accepted then
-            CreateThread(StartHorrorEvent)
+            CreateThread(function() StartHorrorEvent(chosen) end)
         end
     end)
 end
@@ -691,9 +806,11 @@ function PlayIntroCutscene(token, onComplete)
     SetEntityCollision(playerPed, false, false)
     DisplayRadar(false)
 
-    if DoesEntityExist(monsterPed) then
-        ClearPedTasksImmediately(monsterPed)
-        FreezeEntityPosition(monsterPed, true)
+    for _, m in ipairs(monsters) do
+        if DoesEntityExist(m.ped) then
+            ClearPedTasksImmediately(m.ped)
+            FreezeEntityPosition(m.ped, true)
+        end
     end
 
     CreateThread(function()
@@ -724,7 +841,7 @@ function PlayIntroCutscene(token, onComplete)
                 Cine("caption", { kicker = "It is already here", text = "Something waits down here in the dark.", delay = 2600 })
                 SendNUIMessage({ action = "playSound", soundId = "growl_far", volume = 0.35 })
                 local c = PushInShot({
-                    subject = mCoords, lookAt = face, camHeight = monsterIsQuadruped and 0.1 or 0.35,
+                    subject = mCoords, lookAt = face, camHeight = quadrupedPeds[monsterPed] and 0.1 or 0.35,
                     far = 4.5, near = 2.0, durationMs = shotMs + 1200, ignore = monsterPed,
                     flicker = true, fovFrom = Config.Cinematic.FOV + 6.0, fovTo = Config.Cinematic.FOV - 6.0,
                 })
@@ -786,8 +903,8 @@ function PlayIntroCutscene(token, onComplete)
         SafeTeleport(playerPed, Config.InteriorSpawnCoords, Config.InteriorHeading)
         FreezeEntityPosition(playerPed, false)
 
-        if DoesEntityExist(monsterPed) then
-            FreezeEntityPosition(monsterPed, false)
+        for _, m in ipairs(monsters) do
+            if DoesEntityExist(m.ped) then FreezeEntityPosition(m.ped, false) end
         end
         DisplayRadar(true)
         cutsceneActive = false
@@ -802,13 +919,16 @@ end
 -- ============================================================
 -- EVENT START
 -- ============================================================
-function StartHorrorEvent()
+function StartHorrorEvent(chosenDifficulty)
     if isEventActive then return end
+    difficulty = Config.Difficulty[chosenDifficulty or ''] and chosenDifficulty or 'easy'
+    diff = Config.Difficulty[difficulty]
 
     eventSession = eventSession + 1
     local token = eventSession
 
     isEventActive = true
+    TriggerServerEvent('horror:runStarted')
     countdownTimer = Config.HeadStartSeconds
     timesCaught = 0
     flashlightBattery = 100.0
@@ -839,6 +959,27 @@ function StartHorrorEvent()
     lastSeenCoords = nil
     currentPatrolTarget = nil
     selectedMonsterModelName = nil
+    monsters, quadrupedPeds = {}, {}
+    eggProp, eggItem, eggPos, eggFound = nil, nil, nil, false
+
+    local tz = Diff().taser
+    local roll = math.random()
+    if roll < tz.noTaserChance then
+        taserMode, taserShotsLeft = 'none', nil
+    elseif roll < tz.noTaserChance + tz.limitedChance then
+        taserMode, taserShotsLeft = 'limited', tz.limitedShots
+    else
+        taserMode, taserShotsLeft = 'full', nil
+    end
+    bottles = (taserMode == 'none') and Config.Unarmed.Bottles or 0
+    runStats = {
+        difficulty = difficulty, monsters = 0, startedNoTaser = taserMode == 'none',
+        caught = 0, fuses = 0, stuns = 0, tasersFired = 0, bottlesThrown = 0, lures = 0,
+        item = nil, debug = debugGhost,
+    }
+    lastTaserStatShot = 0
+    throwingBottle = false
+    secondWindReadyAt, secondWindUntil = 0, 0
 
     math.randomseed(GetGameTimer())
     actualRealExitIndex = math.random(#Config.ExitPoints)
@@ -918,7 +1059,11 @@ function StartHorrorEvent()
     SetTimecycleModifierStrength(1.0)
 
     GiveWeaponToPed(playerPed, WEAPON_FLASHLIGHT, 1, false, true)
-    GiveWeaponToPed(playerPed, WEAPON_STUNGUN, 100, false, false)
+    if taserMode ~= 'none' then
+        GiveWeaponToPed(playerPed, WEAPON_STUNGUN, 100, false, false)
+    elseif not hadStungun then
+        RemoveWeaponFromPed(playerPed, WEAPON_STUNGUN)
+    end
     SetCurrentPedWeapon(playerPed, WEAPON_FLASHLIGHT, true)
 
     StartControlLoop(token)
@@ -926,14 +1071,14 @@ function StartHorrorEvent()
     StartProximitySoundLoop(token)
     StartSurvivalMechanicsLoop(token)
     StartHidingLoop(token)
+    StartSecondWindLoop(token)
 
-    CreateMonster(token, nil, function(success)
-        if not success then
-            EndHorrorEvent(false, false, "Failed to spawn the monster - event cancelled.")
-            return
-        end
+    local wanted = Diff().monsters + ((math.random() < (Diff().extraMonsterChance or 0)) and 1 or 0)
 
+    local function Proceed()
+        if runStats then runStats.monsters = #LiveMonsters() end
         SpawnClueProps(token)
+        SpawnEasterEgg(token)
 
         local function BeginChaseSequence()
             StartDarknessEnforcementLoop(token)
@@ -953,9 +1098,18 @@ function StartHorrorEvent()
                 end
 
                 if IsSessionActive(token) then
-                    ShowNotification("IT IS COMING. FIND THE FUSES.", 5000)
+                    local count = #LiveMonsters()
+                    ShowNotification(count > 1 and ("THERE ARE %d OF THEM. FIND THE FUSES."):format(count) or "IT IS COMING. FIND THE FUSES.", 5000)
                     chaseStartTime = GetGameTimer()
-                    StartStalkerAI(token)
+                    for _, m in ipairs(LiveMonsters()) do
+                        StartStalkerAI(token, m)
+                    end
+                    Wait(5200)
+                    if taserMode == 'none' then
+                        ShowNotification("~r~No taser this run.~s~ Throw bottles with ~b~G~s~ to lure it away.", 6000)
+                    elseif taserMode == 'limited' then
+                        ShowNotification(("~o~Your taser only has %d charges left this run.~s~"):format(taserShotsLeft), 5000)
+                    end
                 end
             end)
         end
@@ -965,7 +1119,24 @@ function StartHorrorEvent()
         else
             BeginChaseSequence()
         end
-    end)
+    end
+
+    local created = 0
+    local function SpawnNext()
+        CreateMonster(token, nil, function(success)
+            if success then created = created + 1 end
+            if not success and created == 0 then
+                EndHorrorEvent(false, false, "Failed to spawn the monster - event cancelled.")
+                return
+            end
+            if success and created < wanted then
+                SpawnNext()
+            elseif IsSessionActive(token) then
+                Proceed()
+            end
+        end)
+    end
+    SpawnNext()
 end
 
 -- ============================================================
@@ -994,10 +1165,12 @@ end
 function StartMonsterSilenceLoop(token)
     CreateThread(function()
         while IsSessionActive(token) do
-            if monsterPed and DoesEntityExist(monsterPed) then
-                StopCurrentPlayingAmbientSpeech(monsterPed)
-                StopCurrentPlayingSpeech(monsterPed)
-                SetPedConfigFlag(monsterPed, 32, true)
+            for _, m in ipairs(monsters) do
+                if DoesEntityExist(m.ped) then
+                    StopCurrentPlayingAmbientSpeech(m.ped)
+                    StopCurrentPlayingSpeech(m.ped)
+                    SetPedConfigFlag(m.ped, 32, true)
+                end
             end
             Wait(0)
         end
@@ -1030,7 +1203,9 @@ function StartControlLoop(token)
             if not playerHidden and IsDisabledControlJustReleased(0, 37) then
                 local currentWep = GetSelectedPedWeapon(playerPed)
                 if currentWep == WEAPON_FLASHLIGHT then
-                    SetCurrentPedWeapon(playerPed, WEAPON_STUNGUN, true)
+                    if HasPedGotWeapon(playerPed, WEAPON_STUNGUN, false) then
+                        SetCurrentPedWeapon(playerPed, WEAPON_STUNGUN, true)
+                    end
                 elseif flashlightBattery > 0 then
                     SetCurrentPedWeapon(playerPed, WEAPON_FLASHLIGHT, true)
                 end
@@ -1041,8 +1216,39 @@ function StartControlLoop(token)
                 DisableControlAction(0, 22, true)
             end
 
-            if monsterPed and DoesEntityExist(monsterPed) then
-                SetPedMoveRateOverride(monsterPed, monsterMoveRate)
+            for _, m in ipairs(monsters) do
+                if DoesEntityExist(m.ped) then
+                    SetPedMoveRateOverride(m.ped, m.moveRate or 1.0)
+                end
+            end
+
+            if runStats and GetSelectedPedWeapon(playerPed) == WEAPON_STUNGUN
+                and IsPedShooting(playerPed) and GetGameTimer() - lastTaserStatShot > 400 then
+                lastTaserStatShot = GetGameTimer()
+                runStats.tasersFired = runStats.tasersFired + 1
+            end
+
+            if taserShotsLeft and GetSelectedPedWeapon(playerPed) == WEAPON_STUNGUN
+                and IsPedShooting(playerPed) and GetGameTimer() - lastTaserShot > 400 then
+                lastTaserShot = GetGameTimer()
+                taserShotsLeft = taserShotsLeft - 1
+                if taserShotsLeft <= 0 then
+                    taserShotsLeft = 0
+                    CreateThread(function()
+                        Wait(700)
+                        local ped = PlayerPedId()
+                        RemoveWeaponFromPed(ped, WEAPON_STUNGUN)
+                        taserMode = 'none'
+                        taserShotsLeft = nil
+                        bottles = bottles + Config.Unarmed.BottlesWhenDrained
+                        if flashlightBattery > 0 and HasPedGotWeapon(ped, WEAPON_FLASHLIGHT, false) then
+                            SetCurrentPedWeapon(ped, WEAPON_FLASHLIGHT, true)
+                        end
+                        ShowNotification("~r~Your taser is out of charge.~s~ You grab some bottles - ~b~G~s~ to throw.", 4500)
+                    end)
+                else
+                    ShowNotification(("Taser: %d charge%s left"):format(taserShotsLeft, taserShotsLeft == 1 and '' or 's'), 2000)
+                end
             end
 
             Wait(0)
@@ -1086,7 +1292,9 @@ function StartSurvivalMechanicsLoop(token)
             end
 
             if IsPedSprinting(playerPed) then
-                playerStamina = math.max(0.0, playerStamina - Config.StaminaDrainRate)
+                local drain = Config.StaminaDrainRate * (Unarmed() and Config.Unarmed.StaminaDrainMult or 1.0)
+                if GetGameTimer() < secondWindUntil then drain = 0.0 end
+                playerStamina = math.max(0.0, playerStamina - drain)
                 if playerStamina <= 0.0 and not playerExhausted then
                     playerExhausted = true
                     ShowNotification("~r~You're out of breath!~s~", 2500)
@@ -1107,7 +1315,9 @@ function StartSurvivalMechanicsLoop(token)
                 end
             elseif HasPedGotWeapon(playerPed, WEAPON_FLASHLIGHT, false) then
                 RemoveWeaponFromPed(playerPed, WEAPON_FLASHLIGHT)
-                SetCurrentPedWeapon(playerPed, WEAPON_STUNGUN, true)
+                if HasPedGotWeapon(playerPed, WEAPON_STUNGUN, false) then
+                    SetCurrentPedWeapon(playerPed, WEAPON_STUNGUN, true)
+                end
             end
 
             if nightVisionOn then
@@ -1171,10 +1381,13 @@ function StartProximitySoundLoop(token)
         local nextGrowl = GetGameTimer() + math.random(5000, 9000)
 
         while IsSessionActive(token) do
-            if monsterPed and DoesEntityExist(monsterPed) and not cutsceneActive then
+            local cm = ClosestMonster()
+            if cm and not cutsceneActive then
+                local aiState = cm.state
+                local monsterInPlayerView = AnyMonsterInView()
                 local now = GetGameTimer()
                 local pCoords = GetEntityCoords(PlayerPedId())
-                local mCoords = GetEntityCoords(monsterPed)
+                local mCoords = GetEntityCoords(cm.ped)
                 local zDiff = math.abs(pCoords.z - mCoords.z)
                 local dist2d = #(vector2(pCoords.x, pCoords.y) - vector2(mCoords.x, mCoords.y))
                 local sameFloor = zDiff < 4.0
@@ -1300,7 +1513,16 @@ function CreateMonster(token, preferredModel, callback)
         print('[HORROR] Spawning monster variant: ' .. modelName)
         selectedMonsterModelName = modelName
 
-        local spawn = GetPointAwayFrom(Config.MonsterSpawnPoints, GetEntityCoords(PlayerPedId()), Config.MonsterRespawnMinDist)
+        local candidates2 = {}
+        for _, sp in ipairs(Config.MonsterSpawnPoints) do
+            local free = true
+            for _, other in ipairs(monsters) do
+                if DoesEntityExist(other.ped) and #(GetEntityCoords(other.ped) - sp.coords) < 8.0 then free = false end
+            end
+            if free then table.insert(candidates2, sp) end
+        end
+        if #candidates2 == 0 then candidates2 = Config.MonsterSpawnPoints end
+        local spawn = GetPointAwayFrom(candidates2, GetEntityCoords(PlayerPedId()), Config.MonsterRespawnMinDist)
 
         local isQuadruped = Config.QuadrupedModels[modelName] == true
         local ped = CreatePed(isQuadruped and 28 or 4, modelHash, spawn.coords.x, spawn.coords.y, spawn.coords.z, spawn.heading, false, true)
@@ -1312,7 +1534,10 @@ function CreateMonster(token, preferredModel, callback)
             return
         end
 
-        monsterPed = ped
+        local m = { ped = ped, model = modelName, state = 'PATROL', moveRate = 1.0, inView = false }
+        table.insert(monsters, m)
+        quadrupedPeds[ped] = isQuadruped
+        if not monsterPed or not DoesEntityExist(monsterPed) then monsterPed = ped end
         SilenceMonsterPed(ped)
 
         SetPedCanRagdoll(ped, true)
@@ -1328,8 +1553,6 @@ function CreateMonster(token, preferredModel, callback)
         SetBlockingOfNonTemporaryEvents(ped, true)
         SetEntityVisible(ped, true, false)
         SetEntityCollision(ped, true, true)
-
-        monsterIsQuadruped = isQuadruped
 
         local clipSetToApply = Config.MonsterWalkStyle
         if isQuadruped then
@@ -1351,7 +1574,7 @@ function CreateMonster(token, preferredModel, callback)
         end
 
         SetModelAsNoLongerNeeded(modelHash)
-        if callback then callback(true) end
+        if callback then callback(true, m) end
     end)
 end
 
@@ -1363,7 +1586,7 @@ end
 
 local function IsMonsterInPlayerView(playerPed, monster, minDot, maxDist)
     local camPos = GetGameplayCamCoord()
-    local target = GetEntityCoords(monster) + vector3(0.0, 0.0, monsterIsQuadruped and 0.2 or 0.5)
+    local target = GetEntityCoords(monster) + vector3(0.0, 0.0, quadrupedPeds[monster] and 0.2 or 0.5)
     local to = target - camPos
     local dist = #to
     if dist > maxDist or dist < 0.01 then return false, dist end
@@ -1387,7 +1610,7 @@ local function MonsterCanSee(monster, playerPed)
         return HasEntityClearLosToEntity(monster, playerPed, 17)
     end
 
-    local range = IsPlayerLightOn(playerPed) and h.SightRangeLit or h.SightRangeDark
+    local range = (IsPlayerLightOn(playerPed) and h.SightRangeLit or h.SightRangeDark) * Diff().sightMult
     if GetPedStealthMovement(playerPed) then range = range * h.CrouchSightMult end
     if dist > range then return false end
 
@@ -1412,6 +1635,7 @@ local function MonsterCanHear(monster, playerPed)
         return false
     end
 
+    radius = radius * Diff().hearMult
     local m = GetEntityCoords(monster)
     local p = GetEntityCoords(playerPed)
     local dist = #(p - m)
@@ -1422,8 +1646,112 @@ local function MonsterCanHear(monster, playerPed)
     return dist < radius
 end
 
-function MakeNoise(pos, radius)
-    lastNoise = { pos = pos, radius = radius, time = GetGameTimer() }
+function MakeNoise(pos, radius, lure)
+    if debugGhost and not lure then return end
+    lastNoise = { pos = pos, radius = radius, time = GetGameTimer(), lure = lure or false }
+end
+
+-- ============================================================
+-- UNARMED: BOTTLES + SECOND WIND
+-- ============================================================
+local function ThrowBottle()
+    if not isEventActive or cutsceneActive or playerHidden or throwingBottle then return end
+    if bottles <= 0 then return end
+    local U = Config.Unarmed
+    local ped = PlayerPedId()
+    if IsPedRagdoll(ped) or IsPedFalling(ped) then return end
+    throwingBottle = true
+    if runStats then runStats.bottlesThrown = runStats.bottlesThrown + 1 end
+    bottles = bottles - 1
+
+    CreateThread(function()
+        local model = GetHashKey(U.BottleModel)
+        RequestModel(model)
+        local t = 0
+        while not HasModelLoaded(model) and t < 40 do Wait(25) t = t + 1 end
+
+        local dict, clip = 'melee@unarmed@streamed_variations', 'plyr_takedown_front_slap'
+        RequestAnimDict(dict)
+        t = 0
+        while not HasAnimDictLoaded(dict) and t < 20 do Wait(25) t = t + 1 end
+        if HasAnimDictLoaded(dict) then
+            TaskPlayAnim(ped, dict, clip, 8.0, -8.0, 700, 48, 0.0, false, false, false)
+        end
+        Wait(250)
+
+        if not HasModelLoaded(model) then
+            throwingBottle = false
+            return
+        end
+
+        local dir = GetCamForward()
+        local hand = GetPedBoneCoords(ped, 57005, 0.0, 0.0, 0.0)
+        local start = hand + vector3(dir.x, dir.y, 0.0) * 0.6 + vector3(0.0, 0.0, 0.2)
+        local obj = CreateObject(model, start.x, start.y, start.z, false, false, false)
+        SetModelAsNoLongerNeeded(model)
+
+        local interior = GetInteriorFromEntity(ped)
+        if interior ~= 0 then
+            ForceRoomForEntity(obj, interior, GetRoomKeyFromEntity(ped))
+        end
+        SetEntityNoCollisionEntity(obj, ped, false)
+        SetEntityDynamic(obj, true)
+        ActivatePhysics(obj)
+        SetEntityVelocity(obj, dir.x * U.ThrowSpeed, dir.y * U.ThrowSpeed, dir.z * U.ThrowSpeed + 3.0)
+
+        local thrownAt = GetGameTimer()
+        while GetGameTimer() - thrownAt < 3000 do
+            Wait(0)
+            if not DoesEntityExist(obj) then break end
+            if GetGameTimer() - thrownAt > 120 and HasEntityCollidedWithAnything(obj) then break end
+        end
+
+        local landed = DoesEntityExist(obj) and GetEntityCoords(obj) or (start + dir * 8.0)
+        PlaySoundFromCoord(-1, "Drill_Pin_Break", landed.x, landed.y, landed.z, "DLC_HEIST_FLEECA_SOUNDSET", false, 30, false)
+        MakeNoise(landed, U.BottleNoise, true)
+        if DoesEntityExist(obj) then
+            SetEntityAsMissionEntity(obj, true, true)
+            DeleteObject(obj)
+        end
+        throwingBottle = false
+    end)
+end
+
+RegisterCommand('horrorThrow', function()
+    ThrowBottle()
+end, false)
+RegisterKeyMapping('horrorThrow', 'Horror event: throw a bottle', 'keyboard', 'G')
+
+function StartSecondWindLoop(token)
+    CreateThread(function()
+        local sw = Config.Unarmed.SecondWind
+        local boosted = false
+        while IsSessionActive(token) do
+            local now = GetGameTimer()
+            if boosted and now >= secondWindUntil then
+                SetRunSprintMultiplierForPlayer(PlayerId(), 1.0)
+                boosted = false
+            end
+            if sw.Enabled and Unarmed() and not debugGhost and not boosted and now >= secondWindReadyAt
+                and not cutsceneActive and not playerHidden and now > catchGraceUntil then
+                for _, m in ipairs(LiveMonsters()) do
+                    if m.state == "CHASE" and #(GetEntityCoords(m.ped) - GetEntityCoords(PlayerPedId())) < sw.TriggerDist then
+                        boosted = true
+                        secondWindUntil = now + sw.DurationMs
+                        secondWindReadyAt = now + sw.CooldownMs
+                        playerStamina = 100.0
+                        playerExhausted = false
+                        SetRunSprintMultiplierForPlayer(PlayerId(), sw.SprintMult)
+                        ShakeGameplayCam("SMALL_EXPLOSION_SHAKE", 0.25)
+                        ShowNotification("~y~ADRENALINE.~s~ RUN!", 2500)
+                        break
+                    end
+                end
+            end
+            Wait(100)
+        end
+        SetRunSprintMultiplierForPlayer(PlayerId(), 1.0)
+    end)
 end
 
 -- ============================================================
@@ -1573,6 +1901,60 @@ RegisterCommand('horrorspot', function(_, args)
     ShowNotification("Hiding spot saved for this session - copy the line from the F8 console.", 5000)
 end, false)
 
+RegisterCommand('horroreggspot', function()
+    local ped = PlayerPedId()
+    local c = GetEntityCoords(ped)
+    local found, groundZ = GetGroundZFor_3dCoord(c.x, c.y, c.z + 0.5, false)
+    local z = found and groundZ or (c.z - 1.0)
+    local spot = vector3(c.x, c.y, z)
+    Config.EasterEggs.extraSpots = Config.EasterEggs.extraSpots or {}
+    table.insert(Config.EasterEggs.extraSpots, spot)
+
+    print("[HORROR] Easter egg spot added for this session. Paste into Config.EasterEggs.extraSpots:")
+    print(("        vector3(%.4f, %.4f, %.4f),"):format(c.x, c.y, z))
+    ShowNotification("Easter egg spot saved for this session - copy the line from the F8 console.", 5000)
+end, false)
+
+-- ============================================================
+-- DEBUG MODE
+-- ============================================================
+RegisterCommand('horrordebug', function()
+    debugGhost = not debugGhost
+    if debugGhost and runStats then runStats.debug = true end
+    if debugGhost then
+        catchGraceUntil = 0
+        ShowNotification("~y~Horror debug ON~s~ - the monsters can't see, hear or catch you.", 6000)
+        StartDebugMarkerLoop()
+    else
+        ShowNotification("Horror debug ~r~OFF~s~ - you're being hunted again.", 4000)
+    end
+end, false)
+
+function StartDebugMarkerLoop()
+    CreateThread(function()
+        while debugGhost do
+            local p = GetEntityCoords(PlayerPedId())
+            for _, spot in ipairs(Config.HidingSpots) do
+                if #(spot.coords - p) < 40.0 then
+                    DrawMarker(1, spot.coords.x, spot.coords.y, spot.coords.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                        0.8, 0.8, 0.4, 60, 140, 255, 140, false, false, 2, false, nil, nil, false)
+                end
+            end
+            for _, c in ipairs(Config.EasterEggs.extraSpots or {}) do
+                if #(c - p) < 40.0 then
+                    DrawMarker(1, c.x, c.y, c.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                        0.5, 0.5, 0.6, 255, 210, 40, 160, false, false, 2, false, nil, nil, false)
+                end
+            end
+            if eggPos and not eggFound and #(eggPos - p) < 40.0 then
+                DrawMarker(2, eggPos.x, eggPos.y, eggPos.z + 0.6, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0,
+                    0.3, 0.3, 0.3, 255, 120, 0, 200, true, false, 2, false, nil, nil, false)
+            end
+            Wait(0)
+        end
+    end)
+end
+
 -- ============================================================
 -- CAMCORDER NIGHT VISION
 -- ============================================================
@@ -1594,7 +1976,7 @@ end, false)
 RegisterKeyMapping('horrorNightVision', 'Horror event: camcorder night vision', 'keyboard', 'N')
 
 local function MonsterWalkTo(monster, target, speed)
-    if monsterIsQuadruped then
+    if quadrupedPeds[monster] then
         TaskFollowNavMeshToCoord(monster, target.x, target.y, target.z, math.max(1.0, speed), -1, 1.0, 0, 0.0)
     else
         TaskGoToCoordAnyMeans(monster, target.x, target.y, target.z, speed, 0, 0, 786603, 0)
@@ -1602,14 +1984,15 @@ local function MonsterWalkTo(monster, target, speed)
 end
 
 local function IsMonsterWalkTaskDone(monster)
-    return GetScriptTaskStatus(monster, monsterIsQuadruped and TASK_NAVMESH or TASK_GO_TO_COORD) == 7
+    return GetScriptTaskStatus(monster, quadrupedPeds[monster] and TASK_NAVMESH or TASK_GO_TO_COORD) == 7
 end
 
 local function GetCurrentChaseSpeed()
-    if chaseStartTime == 0 then return Config.MonsterChaseSpeed end
+    local mult = Diff().chaseMult * (Unarmed() and Config.Unarmed.ChaseMult or 1.0)
+    if chaseStartTime == 0 then return Config.MonsterChaseSpeed * mult end
     local elapsedSec = (GetGameTimer() - chaseStartTime) / 1000.0
     local t = math.min(1.0, elapsedSec / Config.SpeedRampSeconds)
-    return Config.MonsterChaseSpeed + (Config.MonsterMaxChaseSpeed - Config.MonsterChaseSpeed) * t
+    return (Config.MonsterChaseSpeed + (Config.MonsterMaxChaseSpeed - Config.MonsterChaseSpeed) * t) * mult
 end
 
 local function ScareRumble(ms)
@@ -1737,31 +2120,34 @@ local function TriggerDoubleScare(monster)
     DestroyCam(cam, false)
 end
 
-local function HandleMonsterStunned(token)
+local function HandleMonsterStunned(token, m)
     nextStunAllowed = GetGameTimer() + Config.StunCooldownMs
-    local stunned = monsterPed
+    if runStats then runStats.stuns = runStats.stuns + 1 end
+    local stunned = m.ped
     SilenceMonsterPed(stunned)
-
-    aiState = "PATROL"
-    currentPatrolTarget = nil
-    monsterMoveRate = 1.0
-    monsterInPlayerView = false
-    stalkCooldownUntil = GetGameTimer() + 8000
+    m.state, m.inView, m.moveRate = 'GONE', false, 1.0
+    m.dead = true
 
     ShowNotification("It vanished in the flash...", 3000)
 
     CreateThread(function()
         Wait(2500)
         if DoesEntityExist(stunned) then DeleteEntity(stunned) end
-        if monsterPed == stunned then monsterPed = nil end
+        for i, other in ipairs(monsters) do
+            if other == m then table.remove(monsters, i) break end
+        end
+        quadrupedPeds[stunned] = nil
+        if monsterPed == stunned then
+            monsterPed = monsters[1] and monsters[1].ped or nil
+        end
 
         Wait(3000)
         if not IsSessionActive(token) then return end
 
-        CreateMonster(token, selectedMonsterModelName, function(success)
+        CreateMonster(token, m.model, function(success, newM)
             if success then
-                StartStalkerAI(token)
-            else
+                StartStalkerAI(token, newM)
+            elseif #LiveMonsters() == 0 then
                 EndHorrorEvent(false, false, "The monster failed to return - event ended.")
             end
         end)
@@ -1772,7 +2158,6 @@ local function HandlePlayerCaught(token, monster, playerPed)
     DoScreenFadeOut(0)
     AnimpostfxStopAll()
     focusInActive = false
-    monsterMoveRate = 1.0
 
     if not panelRepaired and #collectedFuseStack > 0 then
         local lostIndex = table.remove(collectedFuseStack)
@@ -1801,14 +2186,19 @@ local function HandlePlayerCaught(token, monster, playerPed)
         SetCurrentPedWeapon(playerPed, WEAPON_FLASHLIGHT, true)
     end
 
-    if DoesEntityExist(monster) then
-        local spawn = GetPointAwayFrom(Config.MonsterSpawnPoints, respawn.coords, Config.MonsterRespawnMinDist)
-        ClearPedTasksImmediately(monster)
-        SafeTeleport(monster, spawn.coords, spawn.heading)
+    local used = {}
+    for _, other in ipairs(LiveMonsters()) do
+        local pool = {}
+        for _, sp in ipairs(Config.MonsterSpawnPoints) do
+            if not used[sp] then table.insert(pool, sp) end
+        end
+        if #pool == 0 then pool = Config.MonsterSpawnPoints end
+        local spawn = GetPointAwayFrom(pool, respawn.coords, Config.MonsterRespawnMinDist)
+        used[spawn] = true
+        ClearPedTasksImmediately(other.ped)
+        SafeTeleport(other.ped, spawn.coords, spawn.heading)
+        other.state, other.patrolTarget, other.reset = 'PATROL', nil, true
     end
-
-    aiState = "PATROL"
-    currentPatrolTarget = nil
 
     Wait(500)
     SendNUIMessage({ action = "stopSound", soundId = "jumpscare" })
@@ -1869,7 +2259,7 @@ end
 
 -- ============================================================
 -- ============================================================
-function StartStalkerAI(token)
+function StartStalkerAI(token, m)
     CreateThread(function()
         local h = Config.Hunter
         local shaking = false
@@ -1886,13 +2276,13 @@ function StartStalkerAI(token)
         local lastShrugMsg = 0
         local gaitCharging = false
 
-        aiState = "PATROL"
-        currentPatrolTarget = nil
+        m.state = "PATROL"
+        m.patrolTarget = nil
 
         local function SetGait(monster, charging)
             if gaitCharging == charging then return end
             gaitCharging = charging
-            if monsterIsQuadruped then return end
+            if quadrupedPeds[monster] then return end
             if charging then
                 ResetPedMovementClipset(monster, 0.2)
             elseif Config.MonsterWalkStyle then
@@ -1904,7 +2294,7 @@ function StartStalkerAI(token)
         end
 
         local function SetState(monster, state)
-            aiState = state
+            m.state = state
             stateSince = GetGameTimer()
             lastIssue, moveTarget = 0, nil
             SetGait(monster, state == "CHASE" or state == "PULLOUT")
@@ -1929,7 +2319,7 @@ function StartStalkerAI(token)
         end
 
         local function StartChase(monster, playerPed)
-            if aiState ~= "CHASE" then
+            if m.state ~= "CHASE" then
                 SendNUIMessage({ action = "playSound", soundId = "screech", volume = 0.7 })
             end
             TaskClearLookAt(monster)
@@ -1940,7 +2330,7 @@ function StartStalkerAI(token)
         end
 
         local function StartInvestigate(monster, pos)
-            if aiState ~= "INVESTIGATE" then SetState(monster, "INVESTIGATE") end
+            if m.state ~= "INVESTIGATE" then SetState(monster, "INVESTIGATE") end
             investigatePos = pos
             lookUntil = 0
         end
@@ -1974,8 +2364,13 @@ function StartStalkerAI(token)
             for _, e in ipairs(extra) do table.insert(searchQueue, e) end
         end
 
-        while IsSessionActive(token) and monsterPed and DoesEntityExist(monsterPed) do
-            local monster = monsterPed
+        while IsSessionActive(token) and not m.dead and m.ped and DoesEntityExist(m.ped) do
+            local monster = m.ped
+            if m.reset then
+                m.reset = false
+                SetState(monster, "PATROL")
+                sightAccum = 0
+            end
             local playerPed = PlayerPedId()
             local now = GetGameTimer()
             local dt = now - lastTick
@@ -1995,8 +2390,8 @@ function StartStalkerAI(token)
 
             if IsEntityDead(monster) or (wasStunned and now >= nextStunAllowed) then
                 if shaking then StopGameplayCamShaking(true) shaking = false end
-                monsterInPlayerView = false
-                HandleMonsterStunned(token)
+                m.inView = false
+                HandleMonsterStunned(token, m)
                 break
             end
             if wasStunned and now - lastShrugMsg > 3000 then
@@ -2004,8 +2399,15 @@ function StartStalkerAI(token)
                 ShowNotification("It shrugs off the shock... the stun gun needs time to recharge.", 2500)
             end
 
-            local sees = MonsterCanSee(monster, playerPed)
-            local hears = MonsterCanHear(monster, playerPed)
+            local lured = now < (m.luredUntil or 0)
+            local ghost = debugGhost
+            local sees = not lured and not ghost and MonsterCanSee(monster, playerPed)
+            local hears = not lured and not ghost and MonsterCanHear(monster, playerPed)
+            if ghost and (m.state == "CHASE" or m.state == "PULLOUT" or m.state == "SEARCH" or m.state == "INVESTIGATE") then
+                SetState(monster, "PATROL")
+                m.patrolTarget = nil
+                sightAccum = 0
+            end
             if sees then
                 sightAccum = sightAccum + dt
                 lastSawPlayerAt = now
@@ -2016,15 +2418,17 @@ function StartStalkerAI(token)
             local heardNoise = lastNoise.time > noiseHandled and #(mCoords - lastNoise.pos) < lastNoise.radius
             if heardNoise then noiseHandled = lastNoise.time end
 
-            monsterInPlayerView = (not playerHidden) and IsMonsterInPlayerView(playerPed, monster, 0.75, 30.0)
+            m.inView = (not playerHidden) and IsMonsterInPlayerView(playerPed, monster, 0.75, 30.0)
 
-            local touching = not playerHidden and not cutsceneActive and aiState ~= "RECOVER"
+            local touching = not playerHidden and not ghost and not cutsceneActive and m.state ~= "RECOVER"
                 and now > catchGraceUntil and zDiff < 3.0 and dist < Config.CatchDistance
 
             if touching then
+                catchGraceUntil = now + 60000
                 if shaking then StopGameplayCamShaking(true) shaking = false end
-                monsterInPlayerView = false
+                m.inView = false
                 timesCaught = timesCaught + 1
+                if runStats then runStats.caught = runStats.caught + 1 end
                 SetHeartbeat(false)
                 TriggerFaceScare(monster, playerPed)
 
@@ -2037,7 +2441,7 @@ function StartStalkerAI(token)
                 if Config.CatchMode == "drag" then
                     HandlePlayerCaught(token, monster, playerPed)
                     SetState(monster, "PATROL")
-                    currentPatrolTarget = nil
+                    m.patrolTarget = nil
                 else
                     HandlePlayerHit(token, monster, playerPed)
                     SetState(monster, "RECOVER")
@@ -2047,13 +2451,26 @@ function StartStalkerAI(token)
                 sightAccum = 0
                 catchGraceUntil = GetGameTimer() + Config.CatchGraceMs
 
-            elseif aiState == "CHASE" then
+            elseif heardNoise and lastNoise.lure and m.state ~= "RECOVER" then
+                m.luredUntil = now + Config.Unarmed.LureMs
+                if runStats and not lastNoise.counted then
+                    lastNoise.counted = true
+                    runStats.lures = runStats.lures + 1
+                end
+                sightAccum = 0
+                TaskClearLookAt(monster)
+                ClearPedTasks(monster)
+                SetState(monster, "INVESTIGATE")
+                investigatePos = lastNoise.pos
+                lookUntil = 0
+
+            elseif m.state == "CHASE" then
                 local done = (now - lastIssue > 750) and GetScriptTaskStatus(monster, TASK_GO_TO_ENTITY) == 7
                 if done or now - lastIssue > 2500 then
                     TaskGoToEntity(monster, playerPed, -1, 1.0, 3.0, 1073741824, 0)
                     lastIssue = now
                 end
-                monsterMoveRate = GetCurrentChaseSpeed()
+                m.moveRate = GetCurrentChaseSpeed()
 
                 if sees and dist < Config.JumpscareTriggerDist and now - lastJumpscareTime > Config.JumpscareCooldownMs then
                     lastJumpscareTime = now
@@ -2068,12 +2485,12 @@ function StartStalkerAI(token)
                     else
                         StartSearch(monster, lastSeenPos or pCoords)
                     end
-                elseif not sees and now - lastSawPlayerAt > h.LoseSightMs then
+                elseif not sees and now - lastSawPlayerAt > (Unarmed() and Config.Unarmed.LoseSightMs or h.LoseSightMs) then
                     StartSearch(monster, lastSeenPos or pCoords)
                 end
 
-            elseif aiState == "PULLOUT" then
-                monsterMoveRate = GetCurrentChaseSpeed()
+            elseif m.state == "PULLOUT" then
+                m.moveRate = GetCurrentChaseSpeed()
                 GoTo(monster, pulloutSpot.coords, 3.0, now)
                 if #(mCoords - pulloutSpot.coords) < 1.4 then
                     if playerHidden and hiddenSpot == pulloutSpot then
@@ -2085,14 +2502,14 @@ function StartStalkerAI(token)
                     StartChase(monster, playerPed)
                 end
 
-            elseif aiState == "RECOVER" then
-                monsterMoveRate = 1.0
+            elseif m.state == "RECOVER" then
+                m.moveRate = 1.0
                 if now > recoverUntil then
                     if sees then StartChase(monster, playerPed) else StartSearch(monster, pCoords) end
                 end
 
             else
-                if sightAccum >= h.NoticeMs then
+                if sightAccum >= h.NoticeMs * Diff().noticeMult then
                     StartChase(monster, playerPed)
                 elseif sees then
                     StartInvestigate(monster, pCoords)
@@ -2102,21 +2519,21 @@ function StartStalkerAI(token)
                     StartInvestigate(monster, lastNoise.pos)
                 end
 
-                if aiState == "PATROL" then
-                    local reached = currentPatrolTarget and #(mCoords - currentPatrolTarget) < 1.5
-                    local stuck = currentPatrolTarget and (now - patrolIssuedAt > Config.PatrolNodeTimeoutMs)
-                    local taskDone = currentPatrolTarget and (now - patrolIssuedAt > 1500) and IsMonsterWalkTaskDone(monster)
-                    if not currentPatrolTarget or reached or stuck or taskDone then
-                        currentPatrolTarget = GetRandomPatrolNode(mCoords)
+                if m.state == "PATROL" then
+                    local reached = m.patrolTarget and #(mCoords - m.patrolTarget) < 1.5
+                    local stuck = m.patrolTarget and (now - patrolIssuedAt > Config.PatrolNodeTimeoutMs)
+                    local taskDone = m.patrolTarget and (now - patrolIssuedAt > 1500) and IsMonsterWalkTaskDone(monster)
+                    if not m.patrolTarget or reached or stuck or taskDone then
+                        m.patrolTarget = GetRandomPatrolNode(mCoords)
                         patrolIssuedAt = now
-                        MonsterWalkTo(monster, currentPatrolTarget, 1.0)
+                        MonsterWalkTo(monster, m.patrolTarget, 1.0)
                     end
-                    monsterMoveRate = Config.MonsterPatrolSpeed
+                    m.moveRate = Config.MonsterPatrolSpeed * Diff().patrolMult
 
-                elseif aiState == "INVESTIGATE" then
+                elseif m.state == "INVESTIGATE" then
                     if lookUntil == 0 then
-                        GoTo(monster, investigatePos, 2.0, now)
-                        monsterMoveRate = 1.0
+                        GoTo(monster, investigatePos, lured and 3.0 or 2.0, now)
+                        m.moveRate = lured and GetCurrentChaseSpeed() or 1.0
                         if #(mCoords - investigatePos) < 1.6 or (now - stateSince > 1500 and IsMonsterWalkTaskDone(monster)) then
                             lookUntil = now + h.InvestigateLookMs
                             ClearPedTasks(monster)
@@ -2125,15 +2542,15 @@ function StartStalkerAI(token)
                         LookAround(monster, now)
                         if now > lookUntil then
                             SetState(monster, "PATROL")
-                            currentPatrolTarget = nil
+                            m.patrolTarget = nil
                         end
                     end
 
-                elseif aiState == "SEARCH" then
+                elseif m.state == "SEARCH" then
                     local entry = searchQueue[searchIdx]
                     if now > searchUntil or not entry then
                         SetState(monster, "PATROL")
-                        currentPatrolTarget = nil
+                        m.patrolTarget = nil
                     elseif pauseUntil > 0 then
                         LookAround(monster, now)
                         if now > pauseUntil then
@@ -2143,7 +2560,7 @@ function StartStalkerAI(token)
                         end
                     else
                         GoTo(monster, entry.pos, searchIdx == 1 and 2.0 or 1.0, now)
-                        monsterMoveRate = 1.0
+                        m.moveRate = 1.0
                         if #(mCoords - entry.pos) < 1.5 or (now - lastIssue > 1500 and IsMonsterWalkTaskDone(monster)) then
                             if entry.spot and playerHidden and hiddenSpot == entry.spot then
                                 ExitHiding(true)
@@ -2156,7 +2573,7 @@ function StartStalkerAI(token)
                 end
             end
 
-            if aiState == "CHASE" and zDiff < 3.0 and dist < 12.0 and dist >= 1.2 then
+            if m.state == "CHASE" and ClosestMonster() == m and zDiff < 3.0 and dist < 12.0 and dist >= 1.2 then
                 local amp = ((12.0 - dist) / 12.0) * 2.0
                 if not shaking then
                     ShakeGameplayCam("VIBRATE_SHAKE", amp)
@@ -2172,7 +2589,7 @@ function StartStalkerAI(token)
             Wait((dist < 6.0) and 0 or 50)
         end
 
-        monsterInPlayerView = false
+        m.inView = false
         if shaking then StopGameplayCamShaking(true) end
     end)
 end
@@ -2336,12 +2753,150 @@ local function DoPanelRepair(token, playerPed)
     end
 end
 
+-- ============================================================
+-- EASTER EGG
+-- ============================================================
+local function EggSpots()
+    local spots = {}
+    local function farFromObjectives(c)
+        for _, f in ipairs(activeFuseCoords) do
+            if #(f - c) < 4.0 then return false end
+        end
+        if #(Config.ControlPanel - c) < 4.0 then return false end
+        for _, e in ipairs(Config.ExitPoints) do
+            if #(e.coords - c) < 4.0 then return false end
+        end
+        return #(Config.InteriorSpawnCoords - c) > 6.0
+    end
+    for _, c in ipairs(Config.EasterEggs.extraSpots or {}) do table.insert(spots, c) end
+    for _, c in ipairs(Config.AllFusePool) do
+        if farFromObjectives(c) then table.insert(spots, c) end
+    end
+    for _, sp in ipairs(Config.PlayerRespawnPoints) do
+        if farFromObjectives(sp.coords) then table.insert(spots, sp.coords) end
+    end
+    return spots
+end
+
+function SpawnEasterEgg(token)
+    local cfg = Config.EasterEggs
+    if not cfg or not cfg.enabled or math.random() > cfg.chance then return end
+
+    local spots = EggSpots()
+    if #spots == 0 or #cfg.items == 0 then return end
+    local item = cfg.items[math.random(#cfg.items)]
+    if cfg.staffNote and cfg.staffNote.enabled and math.random() < cfg.staffNote.chance then
+        item = cfg.staffNote.item
+    end
+
+    local hash
+    local models = {}
+    for _, n in ipairs(item.models or {}) do table.insert(models, n) end
+    for _, n in ipairs(cfg.fallbackModels or {}) do table.insert(models, n) end
+    for _, name in ipairs(models) do
+        local h = GetHashKey(name)
+        if IsModelInCdimage(h) and EnsureModelLoaded(h, 3000) then hash = h break end
+    end
+    if not hash then
+        print('[HORROR] no model available for the easter egg: ' .. item.label)
+        return
+    end
+
+    local base = spots[math.random(#spots)]
+    local a = math.rad(math.random(0, 359))
+    local pos = base + vector3(math.cos(a) * 0.6, math.sin(a) * 0.6, 0.0)
+    local obj = CreateObject(hash, pos.x, pos.y, pos.z + 0.3, false, false, false)
+    if not DoesEntityExist(obj) then return end
+    SetEntityHeading(obj, math.random(0, 359) + 0.0)
+    PlaceObjectOnGroundProperly(obj)
+    FreezeEntityPosition(obj, true)
+    SetEntityCollision(obj, false, false)
+    SetModelAsNoLongerNeeded(hash)
+
+    eggProp, eggItem, eggPos, eggFound = obj, item, GetEntityCoords(obj), false
+
+    CreateThread(function()
+        while IsSessionActive(token) and eggProp == obj and not eggFound do
+            local d = #(GetEntityCoords(PlayerPedId()) - eggPos)
+            if d < 18.0 then
+                local pulse = (math.sin(GetGameTimer() / 350.0) + 1.0) * 0.5
+                if pulse > 0.85 then
+                    DrawLightWithRange(eggPos.x, eggPos.y, eggPos.z + 0.25, 210, 230, 255, 0.9, 1.6)
+                end
+                Wait(0)
+            else
+                Wait(400)
+            end
+        end
+    end)
+end
+
+local function CollectEasterEgg()
+    if eggFound or not eggItem then return end
+    eggFound = true
+    local item = eggItem
+    if runStats then runStats.item = item.id end
+
+    if eggProp and DoesEntityExist(eggProp) then DeleteEntity(eggProp) end
+    eggProp = nil
+    PlaySoundFrontend(-1, "PICK_UP", "HUD_FRONTEND_DEFAULT_SOUNDSET", true)
+
+    if item.effect == 'battery' then
+        flashlightBattery = math.min(100.0, flashlightBattery + (item.amount or 40))
+        local ped = PlayerPedId()
+        if not HasPedGotWeapon(ped, WEAPON_FLASHLIGHT, false) then
+            GiveWeaponToPed(ped, WEAPON_FLASHLIGHT, 1, false, false)
+        end
+    elseif item.effect == 'revealExit' then
+        local e = Config.ExitPoints[actualRealExitIndex].coords
+        if exitRevealBlip then RemoveBlip(exitRevealBlip) end
+        exitRevealBlip = AddBlipForCoord(e.x, e.y, e.z)
+        SetBlipSprite(exitRevealBlip, 38)
+        SetBlipColour(exitRevealBlip, 2)
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentSubstringPlayerName("The real exit")
+        EndTextCommandSetBlipName(exitRevealBlip)
+    elseif item.effect == 'taser' then
+        local ped = PlayerPedId()
+        GiveWeaponToPed(ped, WEAPON_STUNGUN, 100, false, false)
+        taserMode, taserShotsLeft = 'limited', (item.amount or 2)
+    elseif item.effect == 'life' then
+        timesCaught = math.max(0, timesCaught - 1)
+    elseif item.effect == 'staffnote' then
+        TriggerServerEvent('horror:staffNoteFound')
+        ShowNotification(("~y~SECRET FOUND: %s~s~~n~%s"):format(item.label, item.text), 9000)
+        return
+    end
+
+    local key = 'egg_' .. item.id
+    local first = GetResourceKvpInt(key) == 0
+    if first then SetResourceKvpInt(key, 1) end
+    local found = 0
+    for _, it in ipairs(Config.EasterEggs.items) do
+        if GetResourceKvpInt('egg_' .. it.id) == 1 then found = found + 1 end
+    end
+
+    ShowNotification(("~y~SECRET FOUND: %s~s~~n~%s~n~~c~Secrets found: %d / %d%s")
+        :format(item.label, item.text, found, #Config.EasterEggs.items, first and '  (new!)' or ''), 9000)
+end
+
 function StartObjectiveLoop(token)
     CreateThread(function()
         while IsSessionActive(token) do
             local playerPed = PlayerPedId()
             local coords = GetEntityCoords(playerPed)
             local nearSomething = false
+
+            if eggProp and not eggFound and eggPos and not playerHidden then
+                local d = #(coords - eggPos)
+                if d < 8.0 then nearSomething = true end
+                if d < 1.4 then
+                    ShowHelp(("Press ~INPUT_CONTEXT~ to pick up the %s"):format(eggItem.label:lower()))
+                    if IsControlJustReleased(0, 38) then
+                        CollectEasterEgg()
+                    end
+                end
+            end
 
             for i, cluePos in ipairs(activeFuseCoords) do
                 if clueObjects[i] then
@@ -2353,6 +2908,7 @@ function StartObjectiveLoop(token)
 
                             if IsControlJustReleased(0, 38) then
                                 fusesCollected = fusesCollected + 1
+                                if runStats then runStats.fuses = runStats.fuses + 1 end
                                 table.insert(collectedFuseStack, i)
                                 if DoesEntityExist(clueObjects[i]) then
                                     DeleteEntity(clueObjects[i])
@@ -2467,6 +3023,10 @@ end
 function EndHorrorEvent(escaped, silent, message)
     if not isEventActive then return end
     isEventActive = false
+    local summary = runStats or {}
+    summary.escaped = escaped == true
+    TriggerServerEvent('horror:runEnded', summary)
+    runStats = nil
     panelRepaired = false
     cutsceneActive = false
     monsterMoveRate = 1.0
@@ -2483,7 +3043,11 @@ function EndHorrorEvent(escaped, silent, message)
     else
         RemoveWeaponFromPed(playerPed, WEAPON_FLASHLIGHT)
     end
-    if not hadStungun then
+    if hadStungun then
+        if not HasPedGotWeapon(playerPed, WEAPON_STUNGUN, false) then
+            GiveWeaponToPed(playerPed, WEAPON_STUNGUN, 100, false, false)
+        end
+    else
         RemoveWeaponFromPed(playerPed, WEAPON_STUNGUN)
     end
     SetCurrentPedWeapon(playerPed, WEAPON_UNARMED, true)
@@ -2511,11 +3075,19 @@ function EndHorrorEvent(escaped, silent, message)
     DisplayRadar(true)
     monsterInPlayerView = false
 
-    if monsterPed and DoesEntityExist(monsterPed) then
-        FreezeEntityPosition(monsterPed, false)
-        DeleteEntity(monsterPed)
+    for _, m in ipairs(monsters) do
+        m.dead = true
+        if m.ped and DoesEntityExist(m.ped) then
+            FreezeEntityPosition(m.ped, false)
+            DeleteEntity(m.ped)
+        end
     end
+    monsters, quadrupedPeds = {}, {}
     monsterPed = nil
+    if eggProp and DoesEntityExist(eggProp) then DeleteEntity(eggProp) end
+    eggProp = nil
+    if exitRevealBlip then RemoveBlip(exitRevealBlip) exitRevealBlip = nil end
+    taserShotsLeft = nil
 
     CleanupClueProps()
     chaseStartTime = 0
