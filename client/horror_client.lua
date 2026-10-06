@@ -193,6 +193,12 @@ local Config = {
         ScreechGapMs      = 8000,
     },
 
+    FuseGlow = {
+        Range     = 1.4,
+        Intensity = 0.5,
+        Height    = 0.35,
+    },
+
     FirstPerson = {
         FovBoost = 12,
     },
@@ -3602,7 +3608,7 @@ function StartCluePropAnimationLoop(token)
                             DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.12, 255, 30, 20, 0.7, 0.10)
                         else
                             local pulseFactor = 0.6 + (math.sin(math.rad(pulse + i * 37.0)) + 1.0) * 0.35
-                            DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.12, 255, 210, 120, 0.95, 0.145 * pulseFactor)
+                            DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + Config.FuseGlow.Height, 255, 210, 120, Config.FuseGlow.Range, Config.FuseGlow.Intensity * pulseFactor)
                         end
                     end
                 end
