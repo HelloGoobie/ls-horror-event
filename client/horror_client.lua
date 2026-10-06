@@ -2962,6 +2962,7 @@ function PlayDragCutscene(token, monster, playerPed)
             vh = (mh + 180.0 + victimTurn) % 360.0
         end
         SetEntityCoordsNoOffset(victimPed, vp.x + adjX, vp.y + adjY, victimZ + adjZ, false, false, false)
+        SetEntityRotation(victimPed, 0.0, 0.0, vh, 2, true)
         SetEntityHeading(victimPed, vh)
     end
     placeVictim()
