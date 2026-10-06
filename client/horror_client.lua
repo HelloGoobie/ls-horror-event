@@ -184,6 +184,8 @@ local Config = {
         Enabled    = true,
         DurationMs = 5200,
         Distance   = 6.0,
+        Human = { Gap = 0.55, Height = -0.78, Turn = 180.0 },
+        Dog   = { Gap = 0.80, Height = -0.78, Turn = 0.0 },
         Lines = {
             "It drags you deeper into the dark...",
             "You can't break its grip.",
@@ -2391,7 +2393,7 @@ local function HandleMonsterStunned(token, m)
     end)
 end
 
-local function PlayDragCutscene(token, monster, playerPed)
+function PlayDragCutscene(token, monster, playerPed)
     local cfg = Config.DragCutscene
     if not cfg or not cfg.Enabled or not DoesEntityExist(monster) or not IsSessionActive(token) then return false end
 
@@ -2428,7 +2430,10 @@ local function PlayDragCutscene(token, monster, playerPed)
     local pedZ = groundZ + 1.0
 
     local backwards = not isDog and haveAnim
-    local victimGap = backwards and 0.55 or (isDog and 0.85 or 0.95)
+    local tune = (isDog and cfg.Dog) or cfg.Human or {}
+    local victimGap = tune.Gap or 0.6
+    local victimZ = pedZ + (tune.Height or -0.78)
+    local victimTurn = tune.Turn or 180.0
     SetEntityCollision(playerPed, false, false)
     if backwards then
         SetEntityCollision(monster, false, false)
@@ -2450,12 +2455,12 @@ local function PlayDragCutscene(token, monster, playerPed)
         local vp, vh
         if backwards then
             vp = vector3(mp.x, mp.y, 0.0) + fwd * victimGap
-            vh = mh
+            vh = (mh + victimTurn) % 360.0
         else
             vp = vector3(mp.x, mp.y, 0.0) - fwd * victimGap
-            vh = (mh + 180.0) % 360.0
+            vh = (mh + 180.0 + victimTurn) % 360.0
         end
-        SetEntityCoordsNoOffset(playerPed, vp.x, vp.y, pedZ, false, false, false)
+        SetEntityCoordsNoOffset(playerPed, vp.x, vp.y, victimZ, false, false, false)
         SetEntityHeading(playerPed, vh)
     end
     placeVictim()
@@ -2575,6 +2580,28 @@ local function PlayDragCutscene(token, monster, playerPed)
     cutsceneActive = false
     return true
 end
+
+RegisterCommand('horrordragtest', function()
+    if not isEventActive or not debugGhost then
+        ShowNotification("Turn on /horrordebug during a run to use /horrordragtest.", 4000)
+        return
+    end
+    local m = ClosestMonster()
+    if not m then return end
+    local token = eventSession
+    CreateThread(function()
+        local ped = PlayerPedId()
+        local back = GetEntityCoords(ped)
+        local heading = GetEntityHeading(ped)
+        DoScreenFadeOut(200)
+        Wait(220)
+        local mp = GetEntityCoords(m.ped)
+        SetEntityCoordsNoOffset(ped, mp.x, mp.y, mp.z, false, false, false)
+        PlayDragCutscene(token, m.ped, ped)
+        SafeTeleport(ped, back, heading)
+        DoScreenFadeIn(500)
+    end)
+end, false)
 
 local function HandlePlayerCaught(token, monster, playerPed)
     DoScreenFadeOut(0)
