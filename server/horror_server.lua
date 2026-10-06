@@ -1,7 +1,30 @@
 local MinSecondsIntoRun = 30
 local MinEscapeSeconds = 60
 local MaxCatches = 5
+local UseRoutingBuckets = true
+local BucketBase = 7000
 local runs = {}
+local buckets = {}
+
+-- ============================================================
+-- ROUTING BUCKETS
+-- ============================================================
+local function EnterPrivateBucket(src)
+    if not UseRoutingBuckets or buckets[src] ~= nil then return end
+    buckets[src] = GetPlayerRoutingBucket(src)
+    local bucket = BucketBase + src
+    SetRoutingBucketPopulationEnabled(bucket, false)
+    SetPlayerRoutingBucket(src, bucket)
+end
+
+local function LeavePrivateBucket(src)
+    local previous = buckets[src]
+    if previous == nil then return end
+    buckets[src] = nil
+    if GetPlayerName(src) then
+        SetPlayerRoutingBucket(src, previous)
+    end
+end
 
 -- ============================================================
 -- TITLES
@@ -13,7 +36,7 @@ local Titles = {
       check = function(s) return s.escapes >= 10 end },
     { id = 'coroner',         name = 'Coroner',              desc = 'Escape the morgue x100',
       check = function(s) return s.escapes >= 100 end },
-    { id = 'double_shift',    name = 'Double Shift',         desc = 'Escape on Hard x25',
+    { id = 'double_shift',    name = 'Double Shift',         desc = 'Escape on Hard or Extreme x25',
       check = function(s) return s.hardEscapes >= 25 end },
     { id = 'toe_tag',         name = 'Toe Tag',              desc = 'Get caught x100',
       check = function(s) return s.caught >= 100 end },
@@ -39,14 +62,18 @@ local Titles = {
       run = function(r) return r.escaped and r.caught == 0 end },
     { id = 'unplugged',       name = 'Unplugged',            desc = 'Escape a run where you spawned with no taser',
       run = function(r) return r.escaped and r.startedNoTaser end },
-    { id = 'threes_a_crowd',  name = "Three's a Crowd",      desc = 'Escape on Hard with three monsters hunting you',
-      run = function(r) return r.escaped and r.difficulty == 'hard' and r.monsters >= 3 end },
+    { id = 'threes_a_crowd',  name = "Three's a Crowd",      desc = 'Escape on Hard or Extreme with three monsters hunting you',
+      run = function(r) return r.escaped and r.difficulty ~= 'easy' and r.monsters >= 3 end },
     { id = 'last_breath',     name = 'Last Breath',          desc = 'Escape with 4/5 catches used',
       run = function(r) return r.escaped and r.caught >= MaxCatches - 1 end },
-    { id = 'locker_ghost',    name = 'Locker Ghost',         desc = 'Escape on Hard without being caught or firing a taser',
-      run = function(r) return r.escaped and r.difficulty == 'hard' and r.caught == 0 and r.tasersFired == 0 end },
-    { id = 'patient_zero',    name = 'Patient Zero',         desc = 'Escape on Hard with no taser, without being caught',
-      run = function(r) return r.escaped and r.difficulty == 'hard' and r.startedNoTaser and r.caught == 0 end },
+    { id = 'locker_ghost',    name = 'Locker Ghost',         desc = 'Escape on Hard or Extreme without being caught or firing a taser',
+      run = function(r) return r.escaped and r.difficulty ~= 'easy' and r.caught == 0 and r.tasersFired == 0 end },
+    { id = 'patient_zero',    name = 'Patient Zero',         desc = 'Escape on Hard or Extreme with no taser, without being caught',
+      run = function(r) return r.escaped and r.difficulty ~= 'easy' and r.startedNoTaser and r.caught == 0 end },
+    { id = 'graveyard_shift', name = 'Graveyard Shift',      desc = 'Escape on Extreme',
+      run = function(r) return r.escaped and r.difficulty == 'extreme' end },
+    { id = 'the_unkillable',  name = 'The Unkillable',       desc = 'Escape on Extreme without being caught',
+      run = function(r) return r.escaped and r.difficulty == 'extreme' and r.caught == 0 end },
 }
 
 local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, staffnote = true }
@@ -90,6 +117,7 @@ local function Defaults(s)
     s.entered     = s.entered or 0
     s.escapes     = s.escapes or 0
     s.hardEscapes = s.hardEscapes or 0
+    s.extremeEscapes = s.extremeEscapes or 0
     s.caught      = s.caught or 0
     s.fuses       = s.fuses or 0
     s.stuns       = s.stuns or 0
@@ -136,11 +164,11 @@ local function CleanSummary(src, raw, run)
     local seconds = os.time() - run.started
     local r = {
         escaped        = raw.escaped == true and seconds >= MinEscapeSeconds,
-        difficulty     = raw.difficulty == 'hard' and 'hard' or 'easy',
-        monsters       = Num(raw.monsters, 3),
+        difficulty     = (raw.difficulty == 'hard' or raw.difficulty == 'extreme') and raw.difficulty or 'easy',
+        monsters       = Num(raw.monsters, 4),
         startedNoTaser = raw.startedNoTaser == true,
         caught         = Num(raw.caught, MaxCatches),
-        fuses          = Num(raw.fuses, 9),
+        fuses          = Num(raw.fuses, 12),
         stuns          = Num(raw.stuns, math.floor(seconds / 20) + 2),
         tasersFired    = Num(raw.tasersFired, 999),
         lures          = Num(raw.lures, 5),
@@ -156,6 +184,7 @@ end
 -- ============================================================
 RegisterNetEvent('horror:runStarted', function()
     local src = source
+    EnterPrivateBucket(src)
     runs[src] = { started = os.time(), noteClaimed = false }
     local stats = GetStats(src)
     stats.entered = stats.entered + 1
@@ -165,6 +194,7 @@ end)
 
 RegisterNetEvent('horror:runEnded', function(summary)
     local src = source
+    LeavePrivateBucket(src)
     local run = runs[src]
     runs[src] = nil
     if not run then return end
@@ -175,7 +205,8 @@ RegisterNetEvent('horror:runEnded', function(summary)
     local stats = GetStats(src)
     if r.escaped then
         stats.escapes = stats.escapes + 1
-        if r.difficulty == 'hard' then stats.hardEscapes = stats.hardEscapes + 1 end
+        if r.difficulty ~= 'easy' then stats.hardEscapes = stats.hardEscapes + 1 end
+        if r.difficulty == 'extreme' then stats.extremeEscapes = stats.extremeEscapes + 1 end
     end
     stats.caught = stats.caught + r.caught
     stats.fuses  = stats.fuses + r.fuses
@@ -212,12 +243,20 @@ RegisterCommand('horrorstats', function(src)
     for _, t in ipairs(Titles) do
         if s.titles[t.id] then table.insert(owned, t.name) end
     end
-    TriggerClientEvent('horror:notify', src, ('Runs: %d  |  Escapes: %d (Hard %d)  |  Caught: %d~n~Fuses: %d  |  Stuns: %d  |  Lures: %d~n~Titles: %s')
-        :format(s.entered, s.escapes, s.hardEscapes, s.caught, s.fuses, s.stuns, s.lures, #owned > 0 and table.concat(owned, ', ') or 'none yet'), 10000)
+    TriggerClientEvent('horror:notify', src, ('Runs: %d  |  Escapes: %d (Hard+ %d, Extreme %d)  |  Caught: %d~n~Fuses: %d  |  Stuns: %d  |  Lures: %d~n~Titles: %s')
+        :format(s.entered, s.escapes, s.hardEscapes, s.extremeEscapes, s.caught, s.fuses, s.stuns, s.lures, #owned > 0 and table.concat(owned, ', ') or 'none yet'), 10000)
 end, false)
 
 AddEventHandler('playerDropped', function()
     runs[source] = nil
+    buckets[source] = nil
+end)
+
+AddEventHandler('onResourceStop', function(name)
+    if name ~= GetCurrentResourceName() then return end
+    for src in pairs(buckets) do
+        LeavePrivateBucket(src)
+    end
 end)
 
 exports('GetHorrorStats', function(src) return GetStats(src) end)

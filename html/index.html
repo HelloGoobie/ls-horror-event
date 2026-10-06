@@ -159,7 +159,7 @@
         .diff { margin: 0 0 22px; }
         .diff-label { font-size: 11px; font-weight: 600; letter-spacing: .16em; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
         .diff-label span { letter-spacing: .06em; font-weight: 400; }
-        .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .seg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         .seg button {
             display: block; text-align: left; padding: 12px 14px; border-radius: 12px;
             background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); color: var(--ink);
@@ -169,6 +169,8 @@
         .seg button:hover { border-color: rgba(255, 255, 255, .18); }
         .seg button.on { border-color: rgba(229, 56, 59, .65); background: rgba(229, 56, 59, .10); box-shadow: 0 0 0 1px rgba(229, 56, 59, .25) inset; }
         .seg button.on[data-diff="hard"] { background: rgba(229, 56, 59, .18); }
+        .seg button[data-diff="extreme"] b { color: #c77dff; letter-spacing: .06em; }
+        .seg button.on[data-diff="extreme"] { border-color: rgba(157, 78, 221, .8); background: rgba(157, 78, 221, .16); box-shadow: 0 0 0 1px rgba(157, 78, 221, .35) inset, 0 0 24px rgba(157, 78, 221, .18); }
         button {
             display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
             font-family: var(--sans); font-size: 14px; font-weight: 500; letter-spacing: .01em;
@@ -286,6 +288,7 @@
                 <div class="seg">
                     <button data-diff="easy" class="on"><b>Easy</b><small>One of them. It hunts at a walk until it sees you.</small></button>
                     <button data-diff="hard"><b>Hard</b><small>Two or more. Faster, sharper senses, and your taser is less reliable.</small></button>
+                    <button data-diff="extreme"><b>EXTREME</b><small>Three or more. Up to 12 fuses, 3 catches, 2 minutes to escape. Rarely a taser.</small></button>
                 </div>
             </div>
 
@@ -321,9 +324,10 @@
         /* ---------------- Warning ---------------- */
         let warningOpen = false;
         let difficulty = "easy";
+        const DIFFS = ["easy", "hard", "extreme"];
 
         function setDifficulty(d) {
-            difficulty = d === "hard" ? "hard" : "easy";
+            difficulty = DIFFS.includes(d) ? d : "easy";
             document.querySelectorAll(".seg button").forEach(b => b.classList.toggle("on", b.dataset.diff === difficulty));
         }
         document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => setDifficulty(b.dataset.diff)));
@@ -351,8 +355,8 @@
         window.addEventListener("keydown", (e) => {
             if (!warningOpen) return;
             if (e.key === "Enter") { e.preventDefault(); answerWarning(true); }
-            else if (e.key === "ArrowLeft") { e.preventDefault(); setDifficulty("easy"); }
-            else if (e.key === "ArrowRight") { e.preventDefault(); setDifficulty("hard"); }
+            else if (e.key === "ArrowLeft") { e.preventDefault(); setDifficulty(DIFFS[Math.max(0, DIFFS.indexOf(difficulty) - 1)]); }
+            else if (e.key === "ArrowRight") { e.preventDefault(); setDifficulty(DIFFS[Math.min(DIFFS.length - 1, DIFFS.indexOf(difficulty) + 1)]); }
             else if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); answerWarning(false); }
         });
 

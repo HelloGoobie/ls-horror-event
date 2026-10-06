@@ -6,21 +6,20 @@ local Config = {
     InteriorHeading      = 306.9981,
 
     MonsterModels = {
-        'u_m_y_zombie_01',
         'u_m_y_zombie_02',
         'u_m_y_zombie_03',
         'u_m_y_zombie_04',
         'u_m_y_zombie_05',
+        'u_m_y_zombie_06',
     },
 
     QuadrupedModels = {
-        u_m_y_zombie_04 = true,
-        u_m_y_zombie_05 = true
+        u_m_y_zombie_05 = true,
+        u_m_y_zombie_06 = true
     },
     DogMovementClipSet = nil,
 
     FallbackMonsterModels = {
-        'u_m_y_zombie_01',
         'a_m_y_hipster_01',
         'a_m_m_skidrow_01'
     },
@@ -162,14 +161,49 @@ local Config = {
     Difficulty = {
         easy = {
             monsters = 1, extraMonsterChance = 0.0,
+            fuseProps = 9, fusesRequired = { 3, 6 },
             chaseMult = 1.0, patrolMult = 1.0, sightMult = 1.0, hearMult = 1.0, noticeMult = 1.0,
             taser = { noTaserChance = 0.10, limitedChance = 0.25, limitedShots = 2 },
         },
         hard = {
             monsters = 2, extraMonsterChance = 0.30,
+            fuseProps = 10, fusesRequired = { 5, 10 },
             chaseMult = 1.15, patrolMult = 1.25, sightMult = 1.25, hearMult = 1.25, noticeMult = 0.7,
             taser = { noTaserChance = 0.30, limitedChance = 0.40, limitedShots = 2 },
         },
+        extreme = {
+            monsters = 3, extraMonsterChance = 0.25,
+            fuseProps = 12, fusesRequired = { 8, 12 },
+            maxCatches = 3, escapeSeconds = 120,
+            chaseMult = 1.25, patrolMult = 1.4, sightMult = 1.4, hearMult = 1.4, noticeMult = 0.5,
+            taser = { noTaserChance = 0.50, limitedChance = 0.50, limitedShots = 2 },
+        },
+    },
+
+    DragCutscene = {
+        Enabled    = true,
+        DurationMs = 5200,
+        Distance   = 6.0,
+        Lines = {
+            "It drags you deeper into the dark...",
+            "You can't break its grip.",
+            "It isn't finished with you yet.",
+            "Somewhere behind you, a door creaks shut.",
+        },
+    },
+
+    Stun = {
+        TorchRange       = 9.0,
+        TorchDot         = 0.965,
+        TorchHoldMs      = 600,
+        TorchStunMs      = 2500,
+        TorchCooldownMs  = 12000,
+        TorchBatteryCost = 8,
+        PunchRange       = 2.3,
+        PunchDot         = 0.4,
+        PunchStunMs      = 3000,
+        PunchCooldownMs  = 15000,
+        PunchGraceMs     = 700,
     },
 
     Unarmed = {
@@ -309,6 +343,9 @@ local taserMode = 'full'
 local taserShotsLeft = nil
 local lastTaserShot = 0
 local bottles = 0
+local lastMeleeAt = 0
+local meleeSwingId = 0
+local triedExits = {}
 local runStats = nil
 local lastTaserStatShot = 0
 local debugGhost = false
@@ -356,6 +393,16 @@ end
 local function Diff()
     return diff or Config.Difficulty.easy
 end
+
+local function MaxCatches()
+    return Diff().maxCatches or Config.MaxCatches
+end
+
+local function EscapeSeconds()
+    return Diff().escapeSeconds or Config.EscapeTimeSeconds
+end
+
+local DIFF_LABEL = { easy = 'Easy', hard = '~r~HARD~s~', extreme = '~p~EXTREME~s~' }
 
 local function Unarmed()
     return taserMode == 'none'
@@ -523,7 +570,7 @@ CreateThread(function()
                     local secs = math.floor(escapeTimerSeconds % 60)
                     objective = string.format("~r~Escape: %02d:%02d~s~", mins, secs)
                 end
-                DrawScaledText(0.75, 0.900, 0.38, objective .. string.format("  |  Caught: %d / %d  |  %s", timesCaught, Config.MaxCatches, difficulty == 'hard' and '~r~HARD~s~' or 'Easy'), 220, 220, 220, 255, 0)
+                DrawScaledText(0.75, 0.900, 0.38, objective .. string.format("  |  Caught: %d / %d  |  %s", timesCaught, MaxCatches(), DIFF_LABEL[difficulty] or 'Easy'), 220, 220, 220, 255, 0)
 
                 local staminaCol = playerExhausted and "~r~" or (playerStamina < 40 and "~o~" or "~s~")
                 local batteryCol = flashlightBattery < 20 and "~r~" or "~s~"
@@ -531,7 +578,7 @@ CreateThread(function()
                 if bottles > 0 then
                     taserText = taserText .. ('  |  ~b~[G]~s~ Bottles: ~y~%d~s~'):format(bottles)
                 end
-                local status = string.format("Battery: %s%d%%~s~  |  Stamina: %s%d%%~s~  |  %s  |  ~b~[TAB]~s~ Swap  |  ~b~[N]~s~ Night Vision  |  ~b~[CTRL]~s~ Crouch",
+                local status = string.format("Battery: %s%d%%~s~  |  Stamina: %s%d%%~s~  |  %s  |  ~b~[TAB]~s~ Swap  |  ~b~[N]~s~ Night Vision  |  ~b~[R]~s~/~b~[Click]~s~ Punch  |  ~b~[CTRL]~s~ Crouch",
                     batteryCol, math.floor(flashlightBattery), staminaCol, math.floor(playerStamina), taserText)
                 DrawScaledText(0.75, 0.930, 0.35, status, 200, 200, 200, 255, 0)
             end
@@ -856,7 +903,7 @@ function PlayIntroCutscene(token, onComplete)
         if fuseIndex then
             local fusePos = activeFuseCoords[fuseIndex]
             NextShot(fusePos, function()
-                Cine("caption", { kicker = "Objective", text = ("Find %d glowing fuse%s. Some of them are decoys."):format(totalFusesRequired, totalFusesRequired == 1 and "" or "s") })
+                Cine("caption", { kicker = "Objective", text = ("Find %d working fuse%s. Some are dead - you won't know until you grab one."):format(totalFusesRequired, totalFusesRequired == 1 and "" or "s") })
                 return ArcShot({
                     subject = fusePos, lookAt = fusePos + vector3(0.0, 0.0, 0.15), camHeight = 0.55,
                     radius = 1.5, sweep = 50.0, durationMs = shotMs, ignore = clueObjects[fuseIndex], glow = true,
@@ -875,7 +922,7 @@ function PlayIntroCutscene(token, onComplete)
         if Config.CutsceneRevealsExit then
             local exitPos = Config.ExitPoints[actualRealExitIndex].coords
             NextShot(exitPos, function()
-                Cine("caption", { kicker = "Escape", text = "Find the way out before the time runs out." })
+                Cine("caption", { kicker = "Escape", text = "Only one door leads out. Every other door takes you somewhere else in the building." })
                 return PushInShot({
                     subject = exitPos, lookAt = exitPos + vector3(0.0, 0.0, 0.9), camHeight = 1.0,
                     far = 4.0, near = 2.2, durationMs = shotMs,
@@ -972,6 +1019,8 @@ function StartHorrorEvent(chosenDifficulty)
         taserMode, taserShotsLeft = 'full', nil
     end
     bottles = (taserMode == 'none') and Config.Unarmed.Bottles or 0
+    lastMeleeAt, meleeSwingId = 0, 0
+    triedExits = {}
     runStats = {
         difficulty = difficulty, monsters = 0, startedNoTaser = taserMode == 'none',
         caught = 0, fuses = 0, stuns = 0, tasersFired = 0, bottlesThrown = 0, lures = 0,
@@ -984,8 +1033,12 @@ function StartHorrorEvent(chosenDifficulty)
     math.randomseed(GetGameTimer())
     actualRealExitIndex = math.random(#Config.ExitPoints)
 
-    local propCount = math.min(Config.FusePropCount, #Config.AllFusePool)
-    totalFusesRequired = math.random(Config.MinFusesRequired, math.min(Config.MaxFusesRequired, propCount))
+    local fd = Diff()
+    local propCount = math.min(fd.fuseProps or Config.FusePropCount, #Config.AllFusePool)
+    local reqMin = (fd.fusesRequired and fd.fusesRequired[1]) or Config.MinFusesRequired
+    local reqMax = (fd.fusesRequired and fd.fusesRequired[2]) or Config.MaxFusesRequired
+    reqMax = math.min(reqMax, propCount)
+    totalFusesRequired = math.random(math.min(reqMin, reqMax), reqMax)
 
     local shuffledPool = {}
     for _, coord in ipairs(Config.AllFusePool) do
@@ -1072,6 +1125,7 @@ function StartHorrorEvent(chosenDifficulty)
     StartSurvivalMechanicsLoop(token)
     StartHidingLoop(token)
     StartSecondWindLoop(token)
+    StartTorchStunLoop(token)
 
     local wanted = Diff().monsters + ((math.random() < (Diff().extraMonsterChance or 0)) and 1 or 0)
 
@@ -1211,6 +1265,13 @@ function StartControlLoop(token)
                 end
             end
 
+            if IsPedPerformingMeleeAction(playerPed) then
+                if GetGameTimer() - lastMeleeAt > 450 then
+                    meleeSwingId = meleeSwingId + 1
+                end
+                lastMeleeAt = GetGameTimer()
+            end
+
             if playerExhausted then
                 DisableControlAction(0, 21, true)
                 DisableControlAction(0, 22, true)
@@ -1343,7 +1404,7 @@ end
 
 function StartEscapeTimerLoop(token)
     CreateThread(function()
-        escapeTimerSeconds = Config.EscapeTimeSeconds
+        escapeTimerSeconds = EscapeSeconds()
         while IsSessionActive(token) and panelRepaired and escapeTimerSeconds > 0 do
             Wait(1000)
             if IsSessionActive(token) and panelRepaired then
@@ -1582,6 +1643,114 @@ local function IsPlayerLightOn(playerPed)
     if flashlightBattery <= 0 then return false end
     if GetSelectedPedWeapon(playerPed) ~= WEAPON_FLASHLIGHT then return false end
     return IsFlashLightOn(playerPed) or IsPlayerFreeAiming(PlayerId()) or IsControlPressed(0, 25)
+end
+
+local function StunMonster(m, ms, kind)
+    if not m or m.dead or not m.ped or not DoesEntityExist(m.ped) then return end
+    m.stunKind = kind
+    m.stunPending = ms
+    m.stunnedUntil = GetGameTimer() + ms
+end
+
+local function IsMonsterStunned(m)
+    return GetGameTimer() < (m.stunnedUntil or 0)
+end
+
+local function DrawText3D(pos, text, r, g, b, scale)
+    local onScreen, sx, sy = World3dToScreen2d(pos.x, pos.y, pos.z)
+    if not onScreen then return end
+    local camPos = GetGameplayCamCoord()
+    local dist = #(camPos - pos)
+    local s = (scale or 0.55) * math.max(0.45, math.min(1.4, 6.0 / math.max(dist, 0.1)))
+    SetTextScale(0.0, s)
+    SetTextFont(4)
+    SetTextProportional(true)
+    SetTextColour(r, g, b, 235)
+    SetTextOutline()
+    SetTextCentre(true)
+    BeginTextCommandDisplayText("STRING")
+    AddTextComponentSubstringPlayerName(text)
+    EndTextCommandDisplayText(sx, sy)
+end
+
+local function DrawDoorMarker(pos, r, g, b, label)
+    local bob = math.sin(GetGameTimer() / 280.0) * 0.08
+    DrawMarker(1, pos.x, pos.y, pos.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.7, 1.7, 0.55, r, g, b, 120, false, true, 2, false, nil, nil, false)
+    DrawMarker(25, pos.x, pos.y, pos.z - 0.97, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.1, 2.1, 1.0, r, g, b, 160, false, true, 2, false, nil, nil, false)
+    DrawMarker(2, pos.x, pos.y, pos.z + 0.55 + bob, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.45, 0.45, 0.45, r, g, b, 210, false, true, 2, false, nil, nil, false)
+    DrawLightWithRange(pos.x, pos.y, pos.z + 0.6, r, g, b, 3.2, 2.2)
+    DrawText3D(vector3(pos.x, pos.y, pos.z + 1.0 + bob), label, r, g, b)
+end
+
+function StartTorchStunLoop(token)
+    CreateThread(function()
+        local st = Config.Stun
+        while IsSessionActive(token) do
+            local ped = PlayerPedId()
+            local aiming = IsPlayerFreeAiming(PlayerId()) or IsControlPressed(0, 25)
+            if not cutsceneActive and not playerHidden and aiming and IsPlayerLightOn(ped) then
+                local camPos = GetGameplayCamCoord()
+                local fwd = GetCamForward()
+                local now = GetGameTimer()
+                for _, m in ipairs(LiveMonsters()) do
+                    local target = GetEntityCoords(m.ped) + vector3(0.0, 0.0, quadrupedPeds[m.ped] and 0.3 or 0.6)
+                    local to = target - camPos
+                    local d = #to
+                    local lit = d < st.TorchRange and d > 0.1
+                        and (to.x * fwd.x + to.y * fwd.y + to.z * fwd.z) / d > st.TorchDot
+                        and HasEntityClearLosToEntity(ped, m.ped, 17)
+                    if lit and not IsMonsterStunned(m) and now >= (m.torchReadyAt or 0) then
+                        m.torchExposure = (m.torchExposure or 0) + 50
+                        if m.torchExposure >= st.TorchHoldMs then
+                            m.torchExposure = 0
+                            m.torchReadyAt = now + st.TorchCooldownMs
+                            StunMonster(m, st.TorchStunMs, 'torch')
+                            flashlightBattery = math.max(0.0, flashlightBattery - st.TorchBatteryCost)
+                            SendNUIMessage({ action = "playSound", soundId = "screech", volume = 0.5 })
+                            ShowNotification("~y~It recoils from the light!~s~ Move!", 2500)
+                        end
+                    else
+                        m.torchExposure = 0
+                        if lit and now < (m.torchReadyAt or 0) and not IsMonsterStunned(m) and now - (m.torchShrugMsg or 0) > 4000 then
+                            m.torchShrugMsg = now
+                            ShowNotification("It's getting used to the light...", 2000)
+                        end
+                    end
+                end
+            else
+                for _, m in ipairs(monsters) do m.torchExposure = 0 end
+            end
+            Wait(50)
+        end
+    end)
+end
+
+function TryPunchStun(m)
+    local st = Config.Stun
+    local now = GetGameTimer()
+    if IsMonsterStunned(m) then return end
+    if now < (m.punchReadyAt or 0) then
+        if now - (m.punchShrugMsg or 0) > 2500 then
+            m.punchShrugMsg = now
+            ShowNotification("~r~It barely flinches.~s~ You can't hurt it again yet.", 2000)
+        end
+        return
+    end
+    m.punchReadyAt = now + st.PunchCooldownMs
+    StunMonster(m, st.PunchStunMs, 'punch')
+    ShakeGameplayCam("SMALL_EXPLOSION_SHAKE", 0.35)
+    MakeNoise(GetEntityCoords(PlayerPedId()), 10.0)
+    ShowNotification("~y~You knock it back!~s~ RUN!", 2500)
+end
+
+function IsMonsterInPunchReach(m)
+    local ped = PlayerPedId()
+    local pPos = GetEntityCoords(ped)
+    local to = GetEntityCoords(m.ped) - pPos
+    local d = #to
+    if d > Config.Stun.PunchRange or d < 0.05 or math.abs(to.z) > 2.0 then return false end
+    local fwd = GetEntityForwardVector(ped)
+    return (to.x * fwd.x + to.y * fwd.y) / d > Config.Stun.PunchDot
 end
 
 local function IsMonsterInPlayerView(playerPed, monster, minDot, maxDist)
@@ -2154,6 +2323,161 @@ local function HandleMonsterStunned(token, m)
     end)
 end
 
+local function PlayDragCutscene(token, monster, playerPed)
+    local cfg = Config.DragCutscene
+    if not cfg or not cfg.Enabled or not DoesEntityExist(monster) or not IsSessionActive(token) then return false end
+
+    local isDog = quadrupedPeds[monster] == true
+    cutsceneActive = true
+    cutsceneSkipped = false
+
+    local m
+    for _, mm in ipairs(monsters) do if mm.ped == monster then m = mm break end end
+    local oldRate = m and m.moveRate or 1.0
+    if m then m.moveRate = isDog and 0.55 or 1.0 end
+
+    local start = GetEntityCoords(monster)
+    local ang, free = FindOpenAngle(start + vector3(0.0, 0.0, 0.4), cfg.Distance + 1.2, monster)
+    local dist = math.max(1.5, math.min(cfg.Distance, free - 1.2))
+    local dir = vector3(math.cos(math.rad(ang)), math.sin(math.rad(ang)), 0.0)
+    local travelHeading = GetHeadingFromVector_2d(dir.x, dir.y)
+    local finish = start + dir * dist
+
+    ClearPedTasksImmediately(monster)
+    ClearPedTasksImmediately(playerPed)
+    FreezeEntityPosition(monster, false)
+    FreezeEntityPosition(playerPed, false)
+    SetEntityVisible(playerPed, true, false)
+
+    local dict = 'combat@drag_ped@'
+    RequestAnimDict(dict)
+    local t0 = GetGameTimer()
+    while not HasAnimDictLoaded(dict) and GetGameTimer() - t0 < 1500 do Wait(10) end
+    local haveAnim = HasAnimDictLoaded(dict)
+
+    local backwards = not isDog and haveAnim
+    if backwards then
+        SetEntityHeading(monster, (travelHeading + 180.0) % 360.0)
+        TaskPlayAnim(monster, dict, 'injured_drag_plyr', 4.0, 4.0, -1, 1, 0.0, false, false, false)
+        AttachEntityToEntity(playerPed, monster, GetPedBoneIndex(monster, 11816), 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, false, false, false, false, 2, false)
+    else
+        SetEntityHeading(monster, travelHeading)
+        TaskGoStraightToCoord(monster, finish.x, finish.y, finish.z, 1.0, -1, travelHeading, 0.0)
+        AttachEntityToEntity(playerPed, monster, 0, 0.0, isDog and -1.05 or -0.95, isDog and -0.35 or -0.45, 0.0, 0.0, 180.0, false, false, false, false, 2, true)
+    end
+    if haveAnim then
+        TaskPlayAnim(playerPed, dict, 'injured_drag_ped', 4.0, 4.0, -1, 1, 0.0, false, false, false)
+    end
+
+    local side = vector3(-dir.y, dir.x, 0.0)
+    local mid = start + dir * (dist * 0.5) + vector3(0.0, 0.0, 0.2)
+    if ClearDistanceTo(mid, mid + side * 2.8, monster) < ClearDistanceTo(mid, mid - side * 2.8, monster) then side = -side end
+    local sideDist = math.max(1.2, math.min(2.6, ClearDistanceTo(mid, mid + side * 2.8, monster) - 0.3))
+    local facingEnd = backwards and start or finish
+    local faceDir = backwards and -dir or dir
+
+    local cam = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
+    SetCamFov(cam, 46.0)
+    SetCamUseShallowDofMode(cam, true)
+    SetCamNearDof(cam, 0.05)
+    SetCamDofStrength(cam, 1.0)
+    ShakeCam(cam, "HAND_SHAKE", 0.7)
+    SetCamActive(cam, true)
+    RenderScriptCams(true, false, 0, true, false)
+
+    local function pinRoom()
+        local interior = GetInteriorFromEntity(monster)
+        local room = GetRoomKeyFromEntity(monster)
+        if interior ~= 0 and room ~= 0 then
+            ForceRoomForGameViewport(interior, room)
+        end
+    end
+    local mc = GetEntityCoords(monster)
+    SetFocusPosAndVel(mc.x, mc.y, mc.z, 0.0, 0.0, 0.0)
+    pinRoom()
+
+    Cine("cineStart", { skip = Config.AllowCutsceneSkip })
+    local lines = cfg.Lines or {}
+    if #lines > 0 then
+        Cine("caption", { kicker = "Caught", text = lines[math.random(#lines)], delay = 600 })
+    end
+    SendNUIMessage({ action = "stopSound", soundId = "jumpscare" })
+    SendNUIMessage({ action = "unduck" })
+    SendNUIMessage({ action = "playSound", soundId = "growl_close", volume = 0.5 })
+    DoScreenFadeIn(350)
+
+    local began = GetGameTimer()
+    local switchAt = began + math.floor(cfg.DurationMs * 0.55)
+    local switched = false
+    local flick, nextFlick = true, 0
+    while GetGameTimer() - began < cfg.DurationMs and IsSessionActive(token) do
+        local now = GetGameTimer()
+        local t = math.min(1.0, (now - began) / cfg.DurationMs)
+        DisableAllControlActions(0)
+
+        if backwards then
+            local p = start + dir * (dist * t)
+            SetEntityCoordsNoOffset(monster, p.x, p.y, start.z, false, false, false)
+            SetEntityHeading(monster, (travelHeading + 180.0) % 360.0)
+        end
+
+        local mPos = GetEntityCoords(monster)
+        local victim = GetEntityCoords(playerPed)
+        local face = GetMonsterFace(monster)
+        pinRoom()
+
+        if now >= switchAt and not switched then
+            switched = true
+            ShakeCam(cam, "HAND_SHAKE", 1.1)
+            SendNUIMessage({ action = "playSound", soundId = "growl_close", volume = 0.35 })
+        end
+
+        local camPos, lookAt
+        if not switched then
+            camPos = victim + side * sideDist + vector3(0.0, 0.0, 0.25)
+            lookAt = (victim + mPos) * 0.5 + vector3(0.0, 0.0, 0.15)
+        else
+            local back = facingEnd + faceDir * 1.4
+            camPos = vector3(back.x, back.y, start.z - 0.55)
+            lookAt = face
+        end
+        SetCamCoord(cam, camPos.x, camPos.y, camPos.z)
+        PointCamAtCoord(cam, lookAt.x, lookAt.y, lookAt.z)
+        SetCamFarDof(cam, #(camPos - lookAt) + 1.5)
+        SetUseHiDof()
+
+        if now >= nextFlick then
+            flick = math.random() < 0.7
+            nextFlick = now + (flick and math.random(80, 420) or math.random(40, 140))
+        end
+        if flick then
+            DrawLightWithRange(camPos.x, camPos.y, camPos.z + 0.6, 170, 185, 220, 3.5, 2.2)
+        end
+        DrawLightWithRange(face.x, face.y, face.z + 0.1, 200, 10, 10, 1.6, 1.2)
+
+        if IsSkipPressed() then break end
+        Wait(0)
+    end
+
+    DoScreenFadeOut(450)
+    Wait(470)
+    Cine("captionHide")
+    Cine("cineEnd")
+    DetachEntity(playerPed, true, false)
+    StopAnimTask(playerPed, dict, 'injured_drag_ped', 1.0)
+    ClearPedTasksImmediately(playerPed)
+    ClearPedTasksImmediately(monster)
+    RenderScriptCams(false, false, 0, true, false)
+    DestroyCam(cam, false)
+    ClearRoomForGameViewport()
+    ClearFocus()
+    RemoveAnimDict(dict)
+    if m then m.moveRate = oldRate end
+    cutsceneSkipped = false
+    cutsceneActive = false
+    return true
+end
+
 local function HandlePlayerCaught(token, monster, playerPed)
     DoScreenFadeOut(0)
     AnimpostfxStopAll()
@@ -2166,8 +2490,11 @@ local function HandlePlayerCaught(token, monster, playerPed)
         ShowNotification(("It dragged you into the dark - you dropped a fuse! It's back where you found it. (%d/%d)")
             :format(fusesCollected, totalFusesRequired), 6000)
     else
-        ShowNotification(("It dragged you into the dark... (%d/%d)"):format(timesCaught, Config.MaxCatches), 4000)
+        ShowNotification(("It dragged you into the dark... (%d/%d)"):format(timesCaught, MaxCatches()), 4000)
     end
+
+    local dragged = PlayDragCutscene(token, monster, playerPed)
+    if not IsSessionActive(token) then return end
 
     if math.random() < Config.Jumpscare.DoubleScareChance then
         Wait(math.random(700, 1200))
@@ -2175,7 +2502,7 @@ local function HandlePlayerCaught(token, monster, playerPed)
         TriggerDoubleScare(monster)
         Wait(900)
     else
-        Wait(2000)
+        Wait(dragged and 600 or 2000)
     end
     if not IsSessionActive(token) then return end
 
@@ -2223,7 +2550,7 @@ local function HandlePlayerHit(token, monster, playerPed)
         ShowNotification(("It knocked a fuse out of your hands - it's back where you found it. (%d/%d)")
             :format(fusesCollected, totalFusesRequired), 5000)
     else
-        ShowNotification(("RUN. (%d/%d)"):format(timesCaught, Config.MaxCatches), 3000)
+        ShowNotification(("RUN. (%d/%d)"):format(timesCaught, MaxCatches()), 3000)
     end
 
     local p = GetEntityCoords(playerPed)
@@ -2399,6 +2726,35 @@ function StartStalkerAI(token, m)
                 ShowNotification("It shrugs off the shock... the stun gun needs time to recharge.", 2500)
             end
 
+            local meleeHit = HasEntityBeenDamagedByWeapon(monster, WEAPON_UNARMED, 0)
+                or HasEntityBeenDamagedByWeapon(monster, WEAPON_FLASHLIGHT, 0)
+                or HasEntityBeenDamagedByWeapon(monster, 0, 1)
+            if meleeHit then
+                ClearEntityLastWeaponDamage(monster)
+                m.lastSwingHandled = meleeSwingId
+                TryPunchStun(m)
+            elseif now - lastMeleeAt < 350 and m.lastSwingHandled ~= meleeSwingId and IsMonsterInPunchReach(m) then
+                m.lastSwingHandled = meleeSwingId
+                TryPunchStun(m)
+            end
+
+            if m.stunPending then
+                local ms = m.stunPending
+                m.stunPending = nil
+                if shaking then StopGameplayCamShaking(true) shaking = false end
+                SetState(monster, "RECOVER")
+                recoverUntil = now + ms
+                sightAccum = 0
+                ClearPedTasksImmediately(monster)
+                if m.stunKind == 'punch' then
+                    SetPedToRagdoll(monster, ms, ms, 0, false, false, false)
+                elseif quadrupedPeds[monster] then
+                    TaskStandStill(monster, ms)
+                else
+                    TaskCower(monster, ms)
+                end
+            end
+
             local lured = now < (m.luredUntil or 0)
             local ghost = debugGhost
             local sees = not lured and not ghost and MonsterCanSee(monster, playerPed)
@@ -2421,6 +2777,7 @@ function StartStalkerAI(token, m)
             m.inView = (not playerHidden) and IsMonsterInPlayerView(playerPed, monster, 0.75, 30.0)
 
             local touching = not playerHidden and not ghost and not cutsceneActive and m.state ~= "RECOVER"
+                and now - lastMeleeAt > Config.Stun.PunchGraceMs
                 and now > catchGraceUntil and zDiff < 3.0 and dist < Config.CatchDistance
 
             if touching then
@@ -2432,7 +2789,7 @@ function StartStalkerAI(token, m)
                 SetHeartbeat(false)
                 TriggerFaceScare(monster, playerPed)
 
-                if timesCaught >= Config.MaxCatches then
+                if timesCaught >= MaxCatches() then
                     TriggerServerEvent('horror:playerCaught')
                     EndHorrorEvent(false, false, "The monster consumed you...")
                     break
@@ -2623,7 +2980,7 @@ function SpawnFuseProp(i)
         SetEntityAsMissionEntity(obj, true, true)
         FreezeEntityPosition(obj, true)
         SetEntityCollision(obj, false, false)
-        SetEntityAlpha(obj, realFuseIndices[i] and 255 or 190, false)
+        ResetEntityAlpha(obj)
         clueObjects[i] = obj
         return true
     end
@@ -2661,12 +3018,8 @@ function StartCluePropAnimationLoop(token)
                         local oCoords = GetEntityCoords(obj)
                         SetEntityRotation(obj, 0.0, 0.0, rot, 2, true)
 
-                        if realFuseIndices[i] then
-                            local pulseFactor = 0.6 + (math.sin(math.rad(pulse)) + 1.0) * 0.35
-                            DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.15, 255, 220, 120, 3.0 * pulseFactor, 2.2 * pulseFactor)
-                        else
-                            DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z, 120, 160, 180, 1.6, 0.8)
-                        end
+                        local pulseFactor = 0.6 + (math.sin(math.rad(pulse + i * 37.0)) + 1.0) * 0.35
+                        DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.15, 255, 220, 120, 1.6 * pulseFactor, 1.4 * pulseFactor)
                     end
                 end
                 Wait(0)
@@ -2745,7 +3098,7 @@ local function DoPanelRepair(token, playerPed)
     if repairSuccess and IsSessionActive(token) then
         panelRepaired = true
         ShowNotification(("Control panel repaired! Find the exit within %d:%02d!")
-            :format(math.floor(Config.EscapeTimeSeconds / 60), Config.EscapeTimeSeconds % 60), 6000)
+            :format(math.floor(EscapeSeconds() / 60), EscapeSeconds() % 60), 6000)
         PlaySoundFrontend(-1, "HACKING_SUCCESS", "HUD_AWARDS_SOUNDSET", true)
         StartEscapeTimerLoop(token)
     elseif IsSessionActive(token) and timesCaught == caughtAtStart then
@@ -2904,7 +3257,7 @@ function StartObjectiveLoop(token)
                     if dist < 8.0 then nearSomething = true end
                     if dist < 2.0 then
                         if realFuseIndices[i] then
-                            ShowHelp("Press ~INPUT_CONTEXT~ to pick up the Fuse")
+                            ShowHelp("Press ~INPUT_CONTEXT~ to pick up the fuse")
 
                             if IsControlJustReleased(0, 38) then
                                 fusesCollected = fusesCollected + 1
@@ -2924,11 +3277,11 @@ function StartObjectiveLoop(token)
                                 PlaySoundFrontend(-1, "CHALLENGE_UNLOCKED", "HUD_AWARDS_SOUNDSET", true)
                             end
                         else
-                            ShowHelp("Press ~INPUT_CONTEXT~ to search")
+                            ShowHelp("Press ~INPUT_CONTEXT~ to pick up the fuse")
 
                             if IsControlJustReleased(0, 38) then
                                 PlaySoundFrontend(-1, "OOB_Cancel", "GTAO_FM_Events_Soundset", true)
-                                ShowNotification("Just junk... This is a decoy. That was loud.", 2500)
+                                ShowNotification("It crumbles in your hand - a dead fuse. That was loud.", 2500)
                                 MakeNoise(cluePos, Config.Hunter.NoiseDecoy)
 
                                 playerStamina = math.max(0, playerStamina - Config.DecoyStaminaPenalty)
@@ -2940,11 +3293,13 @@ function StartObjectiveLoop(token)
             end
 
             local panelDist = #(coords - Config.ControlPanel)
-            if panelDist < 8.0 then
+            if panelDist < 25.0 then
                 nearSomething = true
-                local r, g, b = 0, 150, 255
-                if panelRepaired then r, g, b = 0, 255, 0 end
-                DrawMarker(1, Config.ControlPanel.x, Config.ControlPanel.y, Config.ControlPanel.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.2, 1.2, 0.8, r, g, b, 60, false, true, 2, false, nil, nil, false)
+                if panelRepaired then
+                    DrawDoorMarker(Config.ControlPanel, 40, 255, 90, "POWER ON")
+                else
+                    DrawDoorMarker(Config.ControlPanel, 40, 160, 255, ("CONTROL PANEL  %d/%d"):format(fusesCollected, totalFusesRequired))
+                end
 
                 if panelDist < 2.0 and not panelRepaired then
                     ShowHelp("Press ~INPUT_CONTEXT~ to Repair Control Panel")
@@ -2965,12 +3320,14 @@ function StartObjectiveLoop(token)
                     local exitPos = exitData.coords
                     local distance = #(coords - exitPos)
 
-                    if distance < 8.0 then
+                    if distance < 25.0 then
                         nearSomething = true
                         if panelRepaired and i == actualRealExitIndex then
-                            DrawMarker(1, exitPos.x, exitPos.y, exitPos.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.2, 1.2, 0.8, 0, 255, 0, 60, false, true, 2, false, nil, nil, false)
+                            DrawDoorMarker(exitPos, 40, 255, 90, "EXIT")
+                        elseif triedExits[i] then
+                            DrawDoorMarker(exitPos, 255, 40, 40, "DEAD END")
                         else
-                            DrawMarker(1, exitPos.x, exitPos.y, exitPos.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.2, 1.2, 0.8, 255, 0, 0, 60, false, true, 2, false, nil, nil, false)
+                            DrawDoorMarker(exitPos, 255, 170, 30, "EXIT ?")
                         end
 
                         if distance < 2.0 then
@@ -2987,6 +3344,7 @@ function StartObjectiveLoop(token)
                                         ShowNotification("The control panel is offline! Repair it first.", 3000)
                                     end
                                 else
+                                    triedExits[i] = true
                                     ShowNotification("It's a dead end! The door slams shut...", 3000)
                                     MakeNoise(exitPos, Config.Hunter.NoiseDoorSlam)
                                     PlaySoundFrontend(-1, "OOB_Cancel", "GTAO_FM_Events_Soundset", true)
@@ -3120,7 +3478,7 @@ function EndHorrorEvent(escaped, silent, message)
         ShowNotification(message, 6000)
     elseif escaped then
         ShowNotification("You escaped! Caught " .. timesCaught .. " time(s) along the way.", 6000)
-    elseif timesCaught >= Config.MaxCatches then
+    elseif timesCaught >= MaxCatches() then
         ShowNotification("The monster consumed you...", 6000)
     else
         ShowNotification("The event has ended.", 5000)

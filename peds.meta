@@ -125,6 +125,65 @@
     <Item>
       <Name>u_m_y_zombie_04</Name>
       <PropsName>null</PropsName>
+      <ClipDictionaryName>move_m@injured</ClipDictionaryName>
+      <BlendShapeFileName>null</BlendShapeFileName>
+      <ExpressionSetName>expr_set_ambient_male</ExpressionSetName>
+      <ExpressionDictionaryName>null</ExpressionDictionaryName>
+      <ExpressionName>null</ExpressionName>
+      <Pedtype>CIVMALE</Pedtype>
+      <MovementClipSet>move_m@injured</MovementClipSet>
+      <StrafeClipSet>move_ped_strafing</StrafeClipSet>
+      <MovementToStrafeClipSet>move_ped_to_strafe</MovementToStrafeClipSet>
+      <InjuredStrafeClipSet>move_strafe_injured</InjuredStrafeClipSet>
+      <FullBodyDamageClipSet>dam_ko</FullBodyDamageClipSet>
+      <AdditiveDamageClipSet>dam_ad</AdditiveDamageClipSet>
+      <DefaultGestureClipSet>ANIM_GROUP_GESTURE_M_Generic</DefaultGestureClipSet>
+      <FacialClipsetGroupName>facial_clipset_group_gen_male</FacialClipsetGroupName>
+      <DefaultVisemeClipSet>ANIM_GROUP_VISEMES_M_Lo</DefaultVisemeClipSet>
+      <SidestepClipSet>MOVE_PED_SIDESTEP</SidestepClipSet>
+      <PedCapsuleName>STANDARD_MALE</PedCapsuleName>
+      <PedLayoutName>LAYOUT_LOW_NEW</PedLayoutName>
+      <PedComponentSetName>TREVOR_COMP_SET</PedComponentSetName>
+      <PedComponentClothName>default</PedComponentClothName>
+      <PedIKSettingsName>IK_SETTINGS_STANDARD</PedIKSettingsName>
+      <TaskDataName>STANDARD_PED</TaskDataName>
+      <DecisionMakerName>DEFAULT</DecisionMakerName>
+      <MotionTaskDataSetName>STANDARD_PED</MotionTaskDataSetName>
+      <DefaultBrawlingStyle>BS_GRAB_ONLY</DefaultBrawlingStyle>
+      <DefaultUnarmedWeapon>WEAPON_UNARMED</DefaultUnarmedWeapon>
+      <Personality>FitnessMale</Personality>
+      <CombatInfo>DEFAULT</CombatInfo>
+      <VfxInfoName>VFXPEDINFO_HUMAN_GENERIC</VfxInfoName>
+      <AmbientClipsForFlee>FLEE</AmbientClipsForFlee>
+      <Radio1>RADIO_GENRE_OFF</Radio1>
+      <Radio2>RADIO_GENRE_OFF</Radio2>
+      <FUpOffset value="0.000000" />
+      <RUpOffset value="0.000000" />
+      <FFrontOffset value="0.000000" />
+      <RFrontOffset value="0.000000" />
+      <MinActivationImpulse value="20.000000" />
+      <Stubble value="0.000000" />
+      <HDDist value="8.000000" />
+      <TargetingThreatModifier value="1.000000" />
+      <KilledPerceptionRangeModifer value="-1.000000" />
+      <Sexiness />
+      <Age value="0" />
+      <MaxPassengersInCar value="0" />
+      <ExternallyDrivenDOFs />
+      <PedVoiceGroup>NULL_VOICE_GROUP</PedVoiceGroup>
+      <AnimalAudioObject />
+      <AbilityType>SAT_NONE</AbilityType>
+      <ThermalBehaviour>TB_WARM</ThermalBehaviour>
+      <SuperlodType>SLOD_HUMAN</SuperlodType>
+      <ScenarioPopStreamingSlot>SCENARIO_POP_STREAMING_NORMAL</ScenarioPopStreamingSlot>
+      <DefaultSpawningPreference>DSP_NORMAL</DefaultSpawningPreference>
+      <DefaultRemoveRangeMultiplier value="1.000000" />
+      <AllowCloseSpawning value="false" />
+    </Item>
+
+    <Item>
+      <Name>u_m_y_zombie_05</Name>
+      <PropsName>null</PropsName>
       <ClipDictionaryName>CREATURES@ROTTWEILER@MOVE</ClipDictionaryName>
       <BlendShapeFileName>null</BlendShapeFileName>
       <ExpressionSetName />
@@ -197,7 +256,7 @@
     </Item>
 
     <Item>
-      <Name>u_m_y_zombie_05</Name>
+      <Name>u_m_y_zombie_06</Name>
       <PropsName>null</PropsName>
       <ClipDictionaryName>CREATURES@ROTTWEILER@MOVE</ClipDictionaryName>
       <BlendShapeFileName>null</BlendShapeFileName>
