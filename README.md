@@ -51,8 +51,7 @@ while an Outlast-style monster hunts them through the building.
 - **Accessibility.** The warning screen has a reduce-flashing toggle and a scare
   volume slider. Your choices and last difficulty are remembered.
 - **Atmosphere.** Dim fluorescent lights that stutter
-  and die, occasional power surges, red emergency lights by the exits and faint red
-  eyes on a monster that's hunting you.
+  and die, occasional power surges and red emergency lights by the exits.
 - **Quality of life.** A dark vignette and faint growls warn you when something is
   close behind you, whispers hint at where to look if you're stuck, and dead fuses
   keep a dim red glint so you don't go back to them.
@@ -150,7 +149,7 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `WrongDoor` | Door lockout, escape time penalty and how far from the exits a wrong door sends you |
 | `FuseGlow` | How far and how strongly the real fuses glow |
 | `FirstPerson` | How much wider the first-person view is during the run (restored afterwards) |
-| `Atmosphere` | Flickering ceiling lights, power surges, emergency lights, monster eyes and the scream cooldown |
+| `Atmosphere` | Flickering ceiling lights, power surges, emergency lights and the scream cooldown |
 | `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
 | `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |
 | `HidingSpots` | Hiding spot list |

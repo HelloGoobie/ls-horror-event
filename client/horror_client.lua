@@ -195,7 +195,6 @@ local Config = {
         LightDistance     = 22.0,
         SurgeEverySeconds = { 45, 90 },
         EmergencyLights   = true,
-        MonsterEyes       = true,
         ScreechGapMs      = 8000,
     },
 
@@ -221,7 +220,7 @@ local Config = {
         Enabled    = true,
         DurationMs = 5200,
         Distance   = 6.0,
-        Human = { Gap = 0.55, Height = 0.0, Turn = 180.0, PelvisLift = 0.16, AutoAlign = true },
+        Human = { Gap = 0.55, Height = 0.0, Turn = 0.0, PelvisLift = 0.16, AutoAlign = true },
         Dog   = { Gap = 0.95, Turn = 180.0 },
         DogLines = {
             "It pins you to the floor...",
@@ -486,11 +485,26 @@ local function DrawScaledText(x, y, scale, text, r, g, b, a, font, centre)
     EndTextCommandDisplayText(x, y, 0)
 end
 
+local promptText, promptUntil, promptShown = nil, 0, nil
+
 local function ShowHelp(text)
-    BeginTextCommandDisplayHelp("STRING")
-    AddTextComponentSubstringPlayerName(text)
-    EndTextCommandDisplayHelp(0, false, true, -1)
+    promptText = text:gsub("~INPUT_CONTEXT~", "{KEY}"):gsub("~.-~", "")
+    promptUntil = GetGameTimer() + 150
 end
+
+CreateThread(function()
+    while true do
+        local want = (GetGameTimer() < promptUntil and not cutsceneActive) and promptText or nil
+        if want ~= promptShown then
+            promptShown = want
+            local key = GetControlInstructionalButton(0, 38, true) or ""
+            key = key:gsub("^t_", ""):gsub("^b_", "")
+            if key == "" or #key > 6 then key = "E" end
+            SendNUIMessage({ action = "prompt", text = want, key = key:upper() })
+        end
+        Wait(promptShown and 0 or 100)
+    end
+end)
 
 local function FloorAwareDist(a, b)
     if math.abs(a.z - b.z) > 3.0 then return 999.0 end
@@ -648,7 +662,7 @@ CreateThread(function()
         if isEventActive or showNote then
             sleep = 0
 
-            if showNote then
+            if showNote and not cutsceneActive then
                 DrawScaledText(0.5, 0.15, 0.55, activeNotification.text, 255, 255, 255, 255)
             end
 
@@ -790,7 +804,7 @@ CreateThread(function()
                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 0.5, 255, 0, 0, 100, false, true, 2, false, nil, nil, false)
 
                 if dist < 2.0 then
-                    ShowHelp("Press ~INPUT_CONTEXT~ to enter the Horror Event")
+                    ShowHelp("Press ~INPUT_CONTEXT~ to enter The Morgue")
 
                     if IsControlJustReleased(0, 38) then
                         RequestStartHorrorEvent()
@@ -1412,16 +1426,6 @@ function StartAtmosphereLoop(token)
                 end
             end
 
-            if a.MonsterEyes then
-                for _, m in ipairs(monsters) do
-                    if m.state == "CHASE" and m.ped and DoesEntityExist(m.ped) and #(GetEntityCoords(m.ped) - p) < 20.0 then
-                        local f = GetMonsterFace(m.ped)
-                        local fwd = GetEntityForwardVector(m.ped)
-                        local e = f + fwd * 0.12
-                        DrawLightWithRange(e.x, e.y, e.z, 255, 0, 0, 0.45, 0.9)
-                    end
-                end
-            end
             Wait(0)
         end
     end)
@@ -2962,6 +2966,7 @@ function PlayDragCutscene(token, monster, playerPed)
             vh = (mh + 180.0 + victimTurn) % 360.0
         end
         SetEntityCoordsNoOffset(victimPed, vp.x + adjX, vp.y + adjY, victimZ + adjZ, false, false, false)
+        SetEntityRotation(victimPed, 0.0, 0.0, vh, 2, true)
         SetEntityHeading(victimPed, vh)
     end
     placeVictim()
@@ -3048,6 +3053,14 @@ function PlayDragCutscene(token, monster, playerPed)
             local back = facingEnd + faceDir * 1.4
             camPos = vector3(back.x, back.y, pedZ - 0.55)
             lookAt = face
+        end
+        local armLen = #(camPos - lookAt)
+        if armLen > 0.3 then
+            local clear = ClearDistanceTo(lookAt, camPos, monster)
+            if clear < armLen - 0.05 then
+                local pull = math.max(0.35, clear - 0.25)
+                camPos = lookAt + (camPos - lookAt) / armLen * pull
+            end
         end
         SetCamCoord(cam, camPos.x, camPos.y, camPos.z)
         PointCamAtCoord(cam, lookAt.x, lookAt.y, lookAt.z)
@@ -4218,9 +4231,9 @@ end)
 
 CreateThread(function()
     local blip = AddBlipForCoord(Config.EntranceCoords.x, Config.EntranceCoords.y, Config.EntranceCoords.z)
-    SetBlipSprite(blip, 432)
+    SetBlipSprite(blip, 310)
     SetBlipColour(blip, 1)
     BeginTextCommandSetBlipName("STRING")
-    AddTextComponentSubstringPlayerName("Horror Event Entrance")
+    AddTextComponentSubstringPlayerName("The Morgue")
     EndTextCommandSetBlipName(blip)
 end)
