@@ -1077,7 +1077,6 @@ function PlayIntroCutscene(token, onComplete)
         for _, m in ipairs(monsters) do
             if DoesEntityExist(m.ped) then FreezeEntityPosition(m.ped, false) end
         end
-        DisplayRadar(true)
         cutsceneActive = false
         DoScreenFadeIn(800)
 
@@ -1437,6 +1436,7 @@ function StartDarknessEnforcementLoop(token)
             NetworkOverrideClockTime(0, 0, 0)
             SetOverrideWeather("EXTRASUNNY")
             SetBlackout(true)
+            DisplayRadar(false)
             Wait(0)
         end
     end)
