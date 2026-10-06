@@ -18,8 +18,6 @@ while an Outlast-style monster hunts them through the building.
   make noise it will come to investigate.
 - **Hiding spots.** Hide in lockers or under beds and peek out. If it saw you
   get in, it will drag you out.
-- **Camcorder night vision.** See in the dark without being seen, at the cost of
-  battery shared with the flashlight.
 - **Difficulty.** Choose Easy, Hard or EXTREME on the content warning. Hard spawns
   two sprinting monsters (sometimes three) that see and hear further and react faster.
   Extreme spawns three or four, needs up to 12 fuses, allows only 3 catches and gives
@@ -62,8 +60,9 @@ while an Outlast-style monster hunts them through the building.
   dark.
 - **Five monster variants.** Three zombies and two zombie dogs, picked at random
   each round.
-- **Modern UI.** NUI content warning, captions, camcorder overlay and hiding
-  overlays.
+- **Modern UI.** NUI content warning, a clean HUD panel with objective, catches,
+  battery, stamina and taser status, cinematic captions, hiding overlays and a
+  cinematic end screen.
 - **Per-player.** The monster and props are local to each player, so several
   people can run the event at the same time.
 
@@ -94,8 +93,7 @@ The entrance appears on the map as a red blip at the hospital.
 | `TAB` | Swap between flashlight and stun gun |
 | `G` | Throw a bottle (no-taser runs only) |
 | `R` / `Left click` | Punch, which knocks the monster down for a few seconds |
-| `Backspace` | Close the run summary |
-| `N` | Camcorder night vision (rebindable in Settings › Key Bindings › FiveM) |
+| `Backspace` | Close the end screen |
 | `CTRL` | Crouch, which makes you quieter and harder to see |
 | `Right mouse` | Aim the flashlight |
 | `Space` | Skip the intro |
@@ -151,7 +149,6 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
 | `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |
 | `HidingSpots` | Hiding spot list |
-| `NightVision` | Night vision on or off, and battery drain |
 | `Jumpscare` | Volume, strobe, rumble and double-scare chance |
 | `ShowContentWarning`, `PlayIntroCutscene`, `CutsceneRevealsExit`, `AllowCutsceneSkip` | Intro and warning options |
 

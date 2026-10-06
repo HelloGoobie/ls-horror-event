@@ -13,7 +13,7 @@
             --ink: #f4f1ee;
             --muted: rgba(244, 241, 238, 0.58);
             --faint: rgba(244, 241, 238, 0.10);
-            --card: rgba(13, 12, 14, 0.86);
+            --card: rgba(13, 12, 14, 0.93);
             --sans: "Inter", "Segoe UI", system-ui, sans-serif;
             --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
         }
@@ -78,32 +78,84 @@
         #behind { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .35s ease;
                   background: radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,.55) 76%, rgba(45,0,0,.88) 100%); }
 
-        /* ---------------- Run summary ---------------- */
+        /* ---------------- Run summary (end screen) ---------------- */
         #summary {
-            position: fixed; right: 4vw; top: 50%; z-index: 8; width: min(380px, 90vw);
-            padding: 26px 28px 20px; border-radius: 18px; background: var(--card);
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(18px); pointer-events: none;
-            opacity: 0; transform: translate(28px, -50%);
-            transition: opacity .45s ease, transform .55s cubic-bezier(.2, .8, .2, 1);
+            position: fixed; inset: 0; z-index: 8; pointer-events: none;
+            display: flex; align-items: center; justify-content: center;
+            background:
+                radial-gradient(ellipse 70% 55% at 50% 50%, rgba(0, 0, 0, .55), rgba(0, 0, 0, .3) 75%),
+                linear-gradient(180deg, rgba(0, 0, 0, .75), rgba(0, 0, 0, .45) 35%, rgba(0, 0, 0, .45) 65%, rgba(0, 0, 0, .85));
+            opacity: 0; transition: opacity .9s ease;
         }
-        #summary.show { opacity: 1; transform: translate(0, -50%); }
-        #summary::before { content: ""; position: absolute; left: 28px; right: 28px; top: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent, var(--red)), transparent); }
-        #summary .kick { font-size: 11px; font-weight: 600; letter-spacing: .28em; color: var(--accent, var(--red)); }
-        #summary h2 { margin: 8px 0 2px; font-family: var(--serif); font-weight: 600; font-size: 34px; line-height: 1.05; }
-        #summary .tag { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
-        #summary .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-        #summary .stat { padding: 9px 12px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.05); }
-        #summary .stat small { display: block; font-size: 10.5px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
-        #summary .stat b { display: block; margin-top: 2px; font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
-        #summary .stat.wide { grid-column: 1 / -1; }
-        #summary .extra { display: grid; gap: 6px; margin-bottom: 12px; }
+        #summary.show { opacity: 1; }
+        #summary .inner { text-align: center; transform: translateY(10px); transition: transform 1.2s cubic-bezier(.2, .8, .2, 1); }
+        #summary.show .inner { transform: none; }
+        #summary .kick { font-size: 12px; font-weight: 600; letter-spacing: .5em; padding-left: .5em; color: var(--accent, var(--red)); }
+        #summary h2 {
+            margin: 14px 0 0; font-family: var(--serif); font-weight: 500; font-size: clamp(56px, 6.4vw, 112px);
+            line-height: 1; letter-spacing: .02em; color: rgba(255, 255, 255, .96);
+            text-shadow: 0 0 60px rgba(0, 0, 0, .9), 0 2px 2px rgba(0, 0, 0, .6);
+        }
+        #summary .rule { width: 140px; height: 1px; margin: 26px auto 14px; background: linear-gradient(90deg, transparent, var(--accent, var(--red)), transparent); }
+        #summary .tag { font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: rgba(255, 255, 255, .55); margin-bottom: 30px; }
+        #summary .stats { display: inline-flex; align-items: stretch; }
+        #summary .stat { padding: 0 34px; text-align: center; }
+        #summary .stat + .stat { border-left: 1px solid rgba(255, 255, 255, .14); }
+        #summary .stat small { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .28em; color: rgba(255, 255, 255, .5); text-transform: uppercase; }
+        #summary .stat b { display: block; margin-top: 8px; font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+        #summary .extra { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 30px; }
         #summary .extra:empty { display: none; }
-        #summary .line { font-size: 13px; padding: 8px 12px; border-radius: 10px; background: rgba(255, 196, 61, .08); border: 1px solid rgba(255, 196, 61, .22); color: #ffd774; }
-        #summary .line.title { background: rgba(157, 78, 221, .10); border-color: rgba(157, 78, 221, .3); color: #d6a8ff; }
-        #summary .dismiss { font-size: 11px; color: rgba(255,255,255,.4); text-align: right; }
+        #summary .line { font-size: 12.5px; letter-spacing: .06em; padding: 8px 14px; border-radius: 999px;
+            background: rgba(10, 9, 11, .72); border: 1px solid rgba(255, 196, 61, .35); color: #ffd774; }
+        #summary .line.title { border-color: rgba(157, 78, 221, .45); color: #d6a8ff; }
+        #summary .line.found { border-color: rgba(255, 255, 255, .18); color: rgba(255, 255, 255, .8); }
+        #summary .dismiss { margin-top: 34px; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(255, 255, 255, .38); }
+
+        /* ---------------- HUD ---------------- */
+        #hud {
+            position: fixed; right: 26px; bottom: 30px; z-index: 2; width: 300px; pointer-events: none;
+            padding: 16px 18px 14px; border-radius: 16px;
+            background: linear-gradient(165deg, rgba(22, 20, 24, .86), rgba(9, 9, 11, .92));
+            border: 1px solid rgba(255, 255, 255, .07);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .04);
+            opacity: 0; transform: translateY(10px); transition: opacity .4s ease, transform .5s cubic-bezier(.2, .8, .2, 1);
+        }
+        #hud.show { opacity: 1; transform: none; }
+        #hud::before { content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--hud-accent, var(--red)), transparent); opacity: .9; }
+        .hud-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .hud-diff { font-size: 10.5px; font-weight: 600; letter-spacing: .32em; color: var(--hud-accent, var(--red)); }
+        .hud-lives { display: flex; gap: 5px; }
+        .hud-lives i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35); }
+        .hud-lives i.lost { background: var(--red); border-color: var(--red); box-shadow: 0 0 8px rgba(229,56,59,.6); }
+        .hud-obj small { display: block; font-size: 10px; font-weight: 600; letter-spacing: .26em; color: rgba(255,255,255,.45); }
+        .hud-objrow { display: flex; align-items: baseline; justify-content: space-between; margin-top: 4px; }
+        .hud-objtext { font-size: 15px; font-weight: 500; color: rgba(255,255,255,.92); }
+        .hud-count { font-size: 22px; font-weight: 300; font-variant-numeric: tabular-nums; color: #fff; }
+        .hud-count.timer { color: #ff5a5d; font-weight: 500; }
+        .hud-count.timer.urgent { animation: urgent 1s ease-in-out infinite; }
+        @keyframes urgent { 50% { opacity: .45; } }
+        .hud-prog { display: flex; gap: 3px; margin-top: 8px; height: 3px; }
+        .hud-prog i { flex: 1; border-radius: 2px; background: rgba(255,255,255,.12); }
+        .hud-prog i.on { background: linear-gradient(90deg, #ffcf70, #ffb547); box-shadow: 0 0 6px rgba(255,190,80,.5); }
+        .hud-meters { display: grid; gap: 7px; margin-top: 14px; }
+        .meter { display: grid; grid-template-columns: 64px 1fr 36px; align-items: center; gap: 10px; font-size: 11px; color: rgba(255,255,255,.6); }
+        .meter i { height: 4px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+        .meter i b { display: block; height: 100%; width: 0; border-radius: 3px; transition: width .2s linear, background .3s ease; }
+        .meter em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; color: rgba(255,255,255,.85); }
+        #mBatt i b { background: #f1e7c9; }
+        #mBatt.low i b { background: #ff5a5d; }
+        #mStam i b { background: #8be3a6; }
+        #mStam.tired i b { background: #ffb547; }
+        #mStam.out i b { background: #ff5a5d; }
+        .hud-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 13px; }
+        .chip { font-size: 11px; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.8); }
+        .chip.good { color: #8be3a6; border-color: rgba(139,227,166,.25); }
+        .chip.warn { color: #ffcf70; border-color: rgba(255,207,112,.25); }
+        .chip.bad { color: #ff7a7c; border-color: rgba(255,90,93,.3); }
+        .hud-keys { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255,255,255,.06);
+            font-size: 10.5px; color: rgba(255,255,255,.5); }
+        .hud-keys kbd { font-size: 9.5px; padding: 2px 6px; margin-right: 4px; }
 
         /* ---------------- Content warning ---------------- */
         #warning {
@@ -130,7 +182,6 @@
             background: var(--card);
             border: 1px solid rgba(255, 255, 255, 0.07);
             box-shadow: 0 40px 120px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(229, 56, 59, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(18px);
             transform: translateY(16px) scale(.98); opacity: 0;
             transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .45s ease;
         }
@@ -303,12 +354,31 @@
 
     <!-- Run summary -->
     <div id="summary" aria-hidden="true">
-        <div class="kick" id="sumKick"></div>
-        <h2 id="sumTitle"></h2>
-        <div class="tag" id="sumTag"></div>
-        <div class="stats" id="sumStats"></div>
-        <div class="extra" id="sumExtra"></div>
-        <div class="dismiss"><kbd>BACKSPACE</kbd> to close</div>
+        <div class="inner">
+            <div class="kick" id="sumKick"></div>
+            <h2 id="sumTitle"></h2>
+            <div class="rule"></div>
+            <div class="tag" id="sumTag"></div>
+            <div class="stats" id="sumStats"></div>
+            <div class="extra" id="sumExtra"></div>
+            <div class="dismiss"><kbd>BACKSPACE</kbd> &nbsp;continue</div>
+        </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-top"><span class="hud-diff" id="hudDiff">EASY</span><span class="hud-lives" id="hudLives"></span></div>
+        <div class="hud-obj">
+            <small id="hudObjLabel">OBJECTIVE</small>
+            <div class="hud-objrow"><span class="hud-objtext" id="hudObj">Find the fuses</span><span class="hud-count" id="hudCount">0 / 0</span></div>
+            <div class="hud-prog" id="hudProg"></div>
+        </div>
+        <div class="hud-meters">
+            <div class="meter" id="mBatt"><span>Battery</span><i><b></b></i><em>100%</em></div>
+            <div class="meter" id="mStam"><span>Stamina</span><i><b></b></i><em>100%</em></div>
+        </div>
+        <div class="hud-chips" id="hudChips"></div>
+        <div class="hud-keys" id="hudKeys"></div>
     </div>
 
     <!-- Content warning -->
@@ -534,8 +604,8 @@
             );
             st.lastChild.dataset.k = "stuns";
             st.firstChild.id = "sumTime";
-            if (d.item) st.appendChild(stat("Found", d.item, true));
             $("sumExtra").replaceChildren();
+            if (d.item) $("sumExtra").appendChild(el("div", "line found", "Found: " + d.item));
             box.classList.add("show");
             box.setAttribute("aria-hidden", "false");
         }
@@ -549,6 +619,73 @@
             else if (d.personalBest) ex.appendChild(el("div", "line", "New personal best!"));
             (d.titles || []).forEach(t => ex.appendChild(el("div", "line title", "Title unlocked: " + t)));
         }
+        const HUD_DIFF = { easy: ["EASY", "#e5383b"], hard: ["HARD", "#ff3b3f"], extreme: ["EXTREME", "#c77dff"] };
+        let hudLast = "";
+        function hudShow(on) { $("hud").classList.toggle("show", !!on); }
+        function hudKey(k, label) {
+            const span = el("span");
+            span.appendChild(el("kbd", null, k));
+            span.appendChild(document.createTextNode(label));
+            return span;
+        }
+        function hudData(d) {
+            const key = JSON.stringify(d);
+            if (key === hudLast) return;
+            hudLast = key;
+            const hud = $("hud");
+            const dd = HUD_DIFF[d.difficulty] || HUD_DIFF.easy;
+            hud.style.setProperty("--hud-accent", dd[1]);
+            $("hudDiff").textContent = dd[0];
+
+            const lives = $("hudLives");
+            const max = Math.max(1, d.maxCatches || 5);
+            if (lives.children.length !== max) lives.replaceChildren(...Array.from({ length: max }, () => el("i")));
+            [...lives.children].forEach((c, i) => c.classList.toggle("lost", i < (d.caught || 0)));
+
+            const count = $("hudCount");
+            const prog = $("hudProg");
+            count.classList.remove("timer", "urgent");
+            if (d.phase === "escape") {
+                $("hudObjLabel").textContent = "ESCAPE";
+                $("hudObj").textContent = "Find the way out";
+                count.textContent = fmtTime(d.escape);
+                count.classList.add("timer");
+                if (d.escape <= 30) count.classList.add("urgent");
+                prog.replaceChildren();
+            } else {
+                $("hudObjLabel").textContent = "OBJECTIVE";
+                $("hudObj").textContent = d.phase === "panel" ? "Restore the power" : "Find working fuses";
+                count.textContent = (d.fuses || 0) + " / " + (d.need || 0);
+                const need = Math.max(0, d.need || 0);
+                if (prog.children.length !== need) prog.replaceChildren(...Array.from({ length: need }, () => el("i")));
+                [...prog.children].forEach((c, i) => c.classList.toggle("on", i < (d.fuses || 0)));
+            }
+
+            const batt = Math.max(0, Math.min(100, d.battery || 0));
+            const stam = Math.max(0, Math.min(100, d.stamina || 0));
+            $("mBatt").querySelector("b").style.width = batt + "%";
+            $("mBatt").querySelector("em").textContent = batt + "%";
+            $("mBatt").classList.toggle("low", batt < 20);
+            $("mStam").querySelector("b").style.width = stam + "%";
+            $("mStam").querySelector("em").textContent = d.exhausted ? "Out" : stam + "%";
+            $("mStam").classList.toggle("out", !!d.exhausted);
+            $("mStam").classList.toggle("tired", !d.exhausted && stam < 40);
+
+            const chips = [];
+            if (d.taser === "none") chips.push(el("span", "chip bad", "No taser"));
+            else if (d.taser === "full") chips.push(el("span", "chip good", "Taser ready"));
+            else chips.push(el("span", "chip warn", "Taser · " + d.taser + " left"));
+            if (d.bottles > 0) chips.push(el("span", "chip", "Bottles × " + d.bottles));
+            $("hudChips").replaceChildren(...chips);
+
+            const keys = [];
+            if (d.hasTaser) keys.push(hudKey("TAB", "Swap"));
+            if (d.bottles > 0) keys.push(hudKey("G", "Throw"));
+            keys.push(hudKey("R", "Punch"));
+            keys.push(hudKey("CTRL", "Crouch"));
+            $("hudKeys").replaceChildren(...keys);
+        }
+
         function hideSummary() {
             $("summary").classList.remove("show");
             $("summary").setAttribute("aria-hidden", "true");
@@ -638,6 +775,8 @@
                 case "summary":       showSummary(data); break;
                 case "summaryResult": summaryResult(data); break;
                 case "summaryHide":   hideSummary(); break;
+                case "hud":           hudShow(data.show); break;
+                case "hudData":       hudData(data); break;
                 case "behind":      $("behind").style.opacity = String(Math.max(0, Math.min(1, Number(data.level) || 0))); break;
                 case "hideWarning": hideWarning(); break;
 

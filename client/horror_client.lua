@@ -269,7 +269,7 @@ local Config = {
             { id = 'staffcard', label = 'Staff key card', models = { 'p_ld_id_card_01', 'prop_cs_swipe_card', 'p_ld_id_card_002' },
               text = "A coroner's key card. Somewhere, a card reader blinks green - the real exit is on your map.", effect = 'revealExit' },
             { id = 'batteries', label = 'Spare batteries', models = { 'prop_battery_01', 'prop_battery_02' },
-              text = 'Fresh batteries for the flashlight and camcorder. +40% battery.', effect = 'battery', amount = 40 },
+              text = 'Fresh batteries for the flashlight. +40% battery.', effect = 'battery', amount = 40 },
             { id = 'teddy', label = 'Worn teddy bear', models = { 'prop_mr_raspberry_01', 'v_res_r_teddy' },
               text = "Someone's teddy, left on a cold floor. It feels warm. One catch is forgiven.", effect = 'life' },
             { id = 'stunpack', label = 'Taser cartridge', models = { 'prop_ld_ammo_pack_01', 'prop_box_ammo07a' },
@@ -283,10 +283,6 @@ local Config = {
     HidingSpots = {
     },
 
-    NightVision = {
-        Enabled    = true,
-        DrainRate  = 0.10,
-    },
 
     Cinematic = {
         FOV           = 38.0,
@@ -351,7 +347,6 @@ local monsterInPlayerView = false
 local playerHidden = false
 local hiddenSpot = nil
 local hiddenAt = 0
-local nightVisionOn = false
 local lastNoise = { pos = vector3(0.0, 0.0, 0.0), radius = 0.0, time = 0 }
 local lastSawPlayerAt = 0
 local lastSeenPos = nil
@@ -626,6 +621,7 @@ end
 -- ============================================================
 -- HUD
 -- ============================================================
+local hudVisible, nextHudUpdate = false, 0
 CreateThread(function()
     while true do
         local sleep = 500
@@ -638,26 +634,32 @@ CreateThread(function()
                 DrawScaledText(0.5, 0.15, 0.55, activeNotification.text, 255, 255, 255, 255)
             end
 
-            if isEventActive and not cutsceneActive then
-                local objective
-                if not panelRepaired then
-                    objective = string.format("Fuses: ~y~%d / %d~s~", fusesCollected, totalFusesRequired)
-                else
-                    local mins = math.floor(escapeTimerSeconds / 60)
-                    local secs = math.floor(escapeTimerSeconds % 60)
-                    objective = string.format("~r~Escape: %02d:%02d~s~", mins, secs)
-                end
-                DrawScaledText(0.75, 0.900, 0.38, objective .. string.format("  |  Caught: %d / %d  |  %s", timesCaught, MaxCatches(), DIFF_LABEL[difficulty] or 'Easy'), 220, 220, 220, 255, 0)
+        end
 
-                local staminaCol = playerExhausted and "~r~" or (playerStamina < 40 and "~o~" or "~s~")
-                local batteryCol = flashlightBattery < 20 and "~r~" or "~s~"
-                local taserText = taserMode == 'none' and '~r~No taser~s~' or (taserShotsLeft and ('Taser: ~o~' .. taserShotsLeft .. '~s~') or 'Taser: ~g~OK~s~')
-                if bottles > 0 then
-                    taserText = taserText .. ('  |  ~b~[G]~s~ Bottles: ~y~%d~s~'):format(bottles)
-                end
-                local status = string.format("Battery: %s%d%%~s~  |  Stamina: %s%d%%~s~  |  %s  |  ~b~[TAB]~s~ Swap  |  ~b~[N]~s~ Night Vision  |  ~b~[R]~s~/~b~[Click]~s~ Punch  |  ~b~[CTRL]~s~ Crouch",
-                    batteryCol, math.floor(flashlightBattery), staminaCol, math.floor(playerStamina), taserText)
-                DrawScaledText(0.75, 0.930, 0.35, status, 200, 200, 200, 255, 0)
+        local wantHud = isEventActive and not cutsceneActive and not warningOpen
+        if wantHud ~= hudVisible then
+            hudVisible = wantHud
+            SendNUIMessage({ action = "hud", show = wantHud })
+        end
+        if wantHud then
+            sleep = 0
+            local now = GetGameTimer()
+            if now >= nextHudUpdate then
+                nextHudUpdate = now + 150
+                local phase = panelRepaired and 'escape' or (fusesCollected >= totalFusesRequired and 'panel' or 'fuses')
+                SendNUIMessage({
+                    action = "hudData",
+                    phase = phase,
+                    fuses = fusesCollected, need = totalFusesRequired,
+                    escape = math.max(0, math.floor(escapeTimerSeconds)),
+                    caught = timesCaught, maxCatches = MaxCatches(),
+                    difficulty = difficulty,
+                    battery = math.floor(flashlightBattery), stamina = math.floor(playerStamina),
+                    exhausted = playerExhausted == true,
+                    taser = taserMode == 'none' and 'none' or (taserShotsLeft and tostring(taserShotsLeft) or 'full'),
+                    hasTaser = HasPedGotWeapon(PlayerPedId(), WEAPON_STUNGUN, false),
+                    bottles = bottles,
+                })
             end
         end
         Wait(sleep)
@@ -1092,7 +1094,6 @@ function StartHorrorEvent(chosenDifficulty)
     monsterInPlayerView = false
     stalkCooldownUntil = 0
     playerHidden, hiddenSpot, hiddenAt = false, nil, 0
-    nightVisionOn = false
     lastNoise = { pos = vector3(0.0, 0.0, 0.0), radius = 0.0, time = 0 }
     lastSawPlayerAt, lastSeenPos = 0, nil
     catchGraceUntil = 0
@@ -1568,18 +1569,6 @@ function StartSurvivalMechanicsLoop(token)
                 RemoveWeaponFromPed(playerPed, WEAPON_FLASHLIGHT)
                 if HasPedGotWeapon(playerPed, WEAPON_STUNGUN, false) then
                     SetCurrentPedWeapon(playerPed, WEAPON_STUNGUN, true)
-                end
-            end
-
-            if nightVisionOn then
-                flashlightBattery = math.max(0.0, flashlightBattery - Config.NightVision.DrainRate)
-                nvTick = (nvTick or 0) + 1
-                if nvTick % 10 == 0 then
-                    SendNUIMessage({ action = "camcorderBattery", level = flashlightBattery })
-                end
-                if flashlightBattery <= 0 then
-                    SetNightVision(false)
-                    ShowNotification("The camcorder battery died...", 3000)
                 end
             end
 
@@ -2419,25 +2408,6 @@ function StartDebugMarkerLoop()
     end)
 end
 
--- ============================================================
--- CAMCORDER NIGHT VISION
--- ============================================================
-function SetNightVision(on)
-    if on and flashlightBattery <= 0 then
-        ShowNotification("The camcorder battery is dead.", 2500)
-        on = false
-    end
-    nightVisionOn = on
-    SetNightvision(on)
-    SendNUIMessage({ action = "camcorder", show = on, level = flashlightBattery })
-    if on then PlaySoundFrontend(-1, "NAV_UP_DOWN", "HUD_FRONTEND_DEFAULT_SOUNDSET", true) end
-end
-
-RegisterCommand('horrorNightVision', function()
-    if not Config.NightVision.Enabled or not isEventActive or cutsceneActive then return end
-    SetNightVision(not nightVisionOn)
-end, false)
-RegisterKeyMapping('horrorNightVision', 'Horror event: camcorder night vision', 'keyboard', 'N')
 
 local function MonsterWalkTo(monster, target, speed)
     if quadrupedPeds[monster] then
@@ -3986,7 +3956,6 @@ function EndHorrorEvent(escaped, silent, message)
     SendNUIMessage({ action = "stopAll" })
 
     CleanupHiding()
-    if nightVisionOn then SetNightVision(false) end
     SetNightvision(false)
     RenderScriptCams(false, false, 0, true, false)
     SendNUIMessage({ action = "cineEnd" })
