@@ -1676,13 +1676,31 @@ local function DrawText3D(pos, text, r, g, b, scale)
     EndTextCommandDisplayText(sx, sy)
 end
 
+local labelVisibility = {}
+
+local function IsLabelVisible(pos)
+    local key = ("%.1f:%.1f:%.1f"):format(pos.x, pos.y, pos.z)
+    local now = GetGameTimer()
+    local cached = labelVisibility[key]
+    if cached and now < cached.expires then return cached.visible end
+    local cam = GetGameplayCamCoord()
+    local probe = StartExpensiveSynchronousShapeTestLosProbe(cam.x, cam.y, cam.z, pos.x, pos.y, pos.z, 1 + 16, PlayerPedId(), 7)
+    local _, hit = GetShapeTestResult(probe)
+    local visible = hit ~= 1 and hit ~= true
+    labelVisibility[key] = { visible = visible, expires = now + 150 }
+    return visible
+end
+
 local function DrawDoorMarker(pos, r, g, b, label)
     local bob = math.sin(GetGameTimer() / 280.0) * 0.08
     DrawMarker(1, pos.x, pos.y, pos.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 0.35, r, g, b, 35, false, true, 2, false, nil, nil, false)
     DrawMarker(25, pos.x, pos.y, pos.z - 0.97, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.9, 1.9, 1.0, r, g, b, 90, false, true, 2, false, nil, nil, false)
     DrawMarker(2, pos.x, pos.y, pos.z + 0.55 + bob, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.35, 0.35, 0.35, r, g, b, 130, false, true, 2, false, nil, nil, false)
     DrawLightWithRange(pos.x, pos.y, pos.z - 0.6, r, g, b, 1.2, 0.08)
-    DrawText3D(vector3(pos.x, pos.y, pos.z + 1.0 + bob), label, r, g, b)
+    local labelPos = vector3(pos.x, pos.y, pos.z + 1.0 + bob)
+    if IsLabelVisible(vector3(pos.x, pos.y, pos.z + 0.6)) then
+        DrawText3D(labelPos, label, r, g, b)
+    end
 end
 
 function StartTorchStunLoop(token)
