@@ -2826,6 +2826,17 @@ function PlayDogMaulCutscene(token, monster, playerPed)
     return true
 end
 
+local function FloorBelow(pos, ignore, fallback)
+    local from = pos + vector3(0.0, 0.0, 1.0)
+    local to = pos - vector3(0.0, 0.0, 2.5)
+    local ray = StartExpensiveSynchronousShapeTestLosProbe(from.x, from.y, from.z, to.x, to.y, to.z, 1, ignore or 0, 7)
+    local _, hit, hitPos = GetShapeTestResult(ray)
+    if hit == 1 then return hitPos.z end
+    local ok, gz = GetGroundZFor_3dCoord(pos.x, pos.y, pos.z + 0.5, false)
+    if ok then return gz end
+    return fallback
+end
+
 function PlayDragCutscene(token, monster, playerPed)
     local cfg = Config.DragCutscene
     if not cfg or not cfg.Enabled or not DoesEntityExist(monster) or not IsSessionActive(token) then return false end
@@ -2861,8 +2872,8 @@ function PlayDragCutscene(token, monster, playerPed)
     while not HasAnimDictLoaded(dict) and GetGameTimer() - t0 < 1500 do Wait(10) end
     local haveAnim = HasAnimDictLoaded(dict)
 
-    local found, groundZ = GetGroundZFor_3dCoord(start.x, start.y, start.z + 0.5, false)
-    if not found or math.abs(groundZ - start.z) > 2.5 then groundZ = start.z - 1.0 end
+    local groundZ = FloorBelow(start, monster, start.z - 1.0)
+    if math.abs(groundZ - start.z) > 2.5 then groundZ = start.z - 1.0 end
     local pedZ = groundZ + 1.0
 
     local backwards = not isDog and haveAnim
@@ -2918,9 +2929,8 @@ function PlayDragCutscene(token, monster, playerPed)
         local ent = GetEntityCoords(victimPed)
         local pelvis = GetPedBoneCoords(victimPed, 11816, 0.0, 0.0, 0.0)
         if #(pelvis - ent) > 0.01 and #(pelvis - ent) < 2.0 then
-            local floorZ = groundZ
-            local okG, gz = GetGroundZFor_3dCoord(pelvis.x, pelvis.y, groundZ + 1.0, false)
-            if okG and math.abs(gz - groundZ) < 0.6 then floorZ = gz end
+            local floorZ = FloorBelow(vector3(pelvis.x, pelvis.y, groundZ + 0.3), victimPed, groundZ)
+            if math.abs(floorZ - groundZ) > 0.6 then floorZ = groundZ end
             adjZ = adjZ + ((floorZ + pelvisLift) - pelvis.z) * 0.5
         end
         if backwards then
