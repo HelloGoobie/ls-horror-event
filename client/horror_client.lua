@@ -180,6 +180,20 @@ local Config = {
         },
     },
 
+    Atmosphere = {
+        Desaturate        = 0.6,
+        CeilingLights     = true,
+        LightRange        = 5.0,
+        LightIntensity    = 0.22,
+        LightColour       = { 165, 200, 190 },
+        MaxLights         = 6,
+        LightDistance     = 22.0,
+        SurgeEverySeconds = { 45, 90 },
+        EmergencyLights   = true,
+        MonsterEyes       = true,
+        ScreechGapMs      = 8000,
+    },
+
     Assist = {
         BehindRange      = 9.0,
         BehindDot        = -0.25,
@@ -425,6 +439,15 @@ local function EscapeSeconds()
 end
 
 local DIFF_LABEL = { easy = 'Easy', hard = '~r~HARD~s~', extreme = '~p~EXTREME~s~' }
+
+local lastMonsterScreech = 0
+local function MonsterScreech(volume)
+    local now = GetGameTimer()
+    if now - lastMonsterScreech < (Config.Atmosphere.ScreechGapMs or 8000) then return false end
+    lastMonsterScreech = now
+    SendNUIMessage({ action = "playSound", soundId = "screech", volume = volume })
+    return true
+end
 
 local function Unarmed()
     return taserMode == 'none'
@@ -1184,6 +1207,10 @@ function StartHorrorEvent(chosenDifficulty)
     DisableScreenblurFade()
     SetTimecycleModifier("MP_Smuggler_Int")
     SetTimecycleModifierStrength(1.0)
+    if (Config.Atmosphere.Desaturate or 0) > 0 then
+        SetExtraTimecycleModifier("rply_saturation_neg")
+        SetExtraTimecycleModifierStrength(Config.Atmosphere.Desaturate)
+    end
 
     GiveWeaponToPed(playerPed, WEAPON_FLASHLIGHT, 1, false, true)
     if taserMode ~= 'none' then
@@ -1211,6 +1238,7 @@ function StartHorrorEvent(chosenDifficulty)
 
         local function BeginChaseSequence()
             StartDarknessEnforcementLoop(token)
+            StartAtmosphereLoop(token)
             StartFirstPersonLoop(token)
             StartMonsterSilenceLoop(token)
 
@@ -1276,6 +1304,81 @@ function StartFirstPersonLoop(token)
     CreateThread(function()
         while IsSessionActive(token) do
             SetFollowPedCamViewMode(4)
+            Wait(0)
+        end
+    end)
+end
+
+function StartAtmosphereLoop(token)
+    CreateThread(function()
+        local a = Config.Atmosphere
+        local anchors = {}
+        for _, sp in ipairs(Config.MonsterSpawnPoints) do table.insert(anchors, sp.coords) end
+        for _, sp in ipairs(Config.PlayerRespawnPoints) do table.insert(anchors, sp.coords) end
+        local lights = {}
+        for i, c in ipairs(anchors) do
+            lights[i] = { pos = vector3(c.x, c.y, c.z + 1.7), on = true, nextChange = 0, dead = math.random() < 0.2 }
+        end
+        local surgeUntil, nextSurge = 0, GetGameTimer() + math.random(a.SurgeEverySeconds[1], a.SurgeEverySeconds[2]) * 1000
+        local cr, cg, cb = a.LightColour[1], a.LightColour[2], a.LightColour[3]
+
+        while IsSessionActive(token) do
+            local now = GetGameTimer()
+            local p = GetEntityCoords(PlayerPedId())
+
+            if not reduceFlash and now >= nextSurge then
+                surgeUntil = now + math.random(1200, 2200)
+                nextSurge = now + math.random(a.SurgeEverySeconds[1], a.SurgeEverySeconds[2]) * 1000
+                if not cutsceneActive then ShakeGameplayCam("SMALL_EXPLOSION_SHAKE", 0.08) end
+            end
+            local surging = now < surgeUntil
+
+            if a.CeilingLights and not surging then
+                local near = {}
+                for _, l in ipairs(lights) do
+                    local d = #(l.pos - p)
+                    if d < a.LightDistance then table.insert(near, { l = l, d = d }) end
+                end
+                table.sort(near, function(x, y) return x.d < y.d end)
+                for k = 1, math.min(a.MaxLights, #near) do
+                    local l = near[k].l
+                    if now >= l.nextChange then
+                        if reduceFlash then
+                            l.on, l.nextChange = not l.dead, now + 1000
+                        elseif l.dead then
+                            l.on = math.random() < 0.08
+                            l.nextChange = now + (l.on and math.random(40, 120) or math.random(1500, 6000))
+                        else
+                            local stutter = math.random() < 0.12
+                            l.on = not stutter
+                            l.nextChange = now + (stutter and math.random(40, 160) or math.random(600, 4000))
+                        end
+                    end
+                    if l.on then
+                        DrawLightWithRange(l.pos.x, l.pos.y, l.pos.z, cr, cg, cb, a.LightRange, a.LightIntensity)
+                    end
+                end
+            end
+
+            if a.EmergencyLights then
+                local pulse = 0.5 + 0.5 * math.sin(now / 900.0)
+                for _, e in ipairs(Config.ExitPoints) do
+                    if #(e.coords - p) < 18.0 then
+                        DrawLightWithRange(e.coords.x, e.coords.y, e.coords.z + 1.6, 255, 20, 10, 3.0, 0.05 + 0.20 * pulse)
+                    end
+                end
+            end
+
+            if a.MonsterEyes then
+                for _, m in ipairs(monsters) do
+                    if m.state == "CHASE" and m.ped and DoesEntityExist(m.ped) and #(GetEntityCoords(m.ped) - p) < 20.0 then
+                        local f = GetMonsterFace(m.ped)
+                        local fwd = GetEntityForwardVector(m.ped)
+                        local e = f + fwd * 0.12
+                        DrawLightWithRange(e.x, e.y, e.z, 255, 0, 0, 0.45, 0.9)
+                    end
+                end
+            end
             Wait(0)
         end
     end)
@@ -1898,7 +2001,7 @@ function StartTorchStunLoop(token)
                             m.torchReadyAt = now + st.TorchCooldownMs
                             StunMonster(m, st.TorchStunMs, 'torch')
                             flashlightBattery = math.max(0.0, flashlightBattery - st.TorchBatteryCost)
-                            SendNUIMessage({ action = "playSound", soundId = "screech", volume = 0.5 })
+                            MonsterScreech(0.5)
                             ShowNotification("~y~It recoils from the light!~s~ Move!", 2500)
                         end
                     else
@@ -3058,7 +3161,7 @@ function StartStalkerAI(token, m)
 
         local function StartChase(monster, playerPed)
             if m.state ~= "CHASE" then
-                SendNUIMessage({ action = "playSound", soundId = "screech", volume = 0.7 })
+                MonsterScreech(0.7)
             end
             TaskClearLookAt(monster)
             SetState(monster, "CHASE")
@@ -3240,8 +3343,9 @@ function StartStalkerAI(token, m)
 
                 if sees and dist < Config.JumpscareTriggerDist and now - lastJumpscareTime > Config.JumpscareCooldownMs then
                     lastJumpscareTime = now
-                    SendNUIMessage({ action = "playSound", soundId = "screech", volume = 0.85 })
-                    ShakeGameplayCam("SMALL_EXPLOSION_SHAKE", 0.5)
+                    if MonsterScreech(0.85) then
+                        ShakeGameplayCam("SMALL_EXPLOSION_SHAKE", 0.5)
+                    end
                 end
 
                 if playerHidden then
@@ -3870,6 +3974,7 @@ function EndHorrorEvent(escaped, silent, message)
     SetCurrentPedWeapon(playerPed, WEAPON_UNARMED, true)
 
     ClearTimecycleModifier()
+    ClearExtraTimecycleModifier()
     SetBlackout(false)
     NetworkClearClockTimeOverride()
     ClearOverrideWeather()
