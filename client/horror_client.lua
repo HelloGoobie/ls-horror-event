@@ -1265,10 +1265,13 @@ function StartControlLoop(token)
                 end
             end
 
-            if IsPedPerformingMeleeAction(playerPed) then
-                if GetGameTimer() - lastMeleeAt > 450 then
-                    meleeSwingId = meleeSwingId + 1
-                end
+            local heldWeapon = GetSelectedPedWeapon(playerPed)
+            local meleeCapable = heldWeapon == WEAPON_UNARMED or heldWeapon == WEAPON_FLASHLIGHT
+            local pressed = IsControlJustPressed(0, 140) or IsControlJustPressed(0, 141) or IsControlJustPressed(0, 142)
+                or (meleeCapable and IsControlJustPressed(0, 24) and not IsControlPressed(0, 25))
+            if pressed and meleeCapable and not cutsceneActive and not playerHidden
+                and GetGameTimer() - lastMeleeAt > 450 then
+                meleeSwingId = meleeSwingId + 1
                 lastMeleeAt = GetGameTimer()
             end
 
@@ -1675,10 +1678,10 @@ end
 
 local function DrawDoorMarker(pos, r, g, b, label)
     local bob = math.sin(GetGameTimer() / 280.0) * 0.08
-    DrawMarker(1, pos.x, pos.y, pos.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.7, 1.7, 0.55, r, g, b, 120, false, true, 2, false, nil, nil, false)
-    DrawMarker(25, pos.x, pos.y, pos.z - 0.97, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.1, 2.1, 1.0, r, g, b, 160, false, true, 2, false, nil, nil, false)
-    DrawMarker(2, pos.x, pos.y, pos.z + 0.55 + bob, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.45, 0.45, 0.45, r, g, b, 210, false, true, 2, false, nil, nil, false)
-    DrawLightWithRange(pos.x, pos.y, pos.z + 0.6, r, g, b, 3.2, 2.2)
+    DrawMarker(1, pos.x, pos.y, pos.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 0.35, r, g, b, 35, false, true, 2, false, nil, nil, false)
+    DrawMarker(25, pos.x, pos.y, pos.z - 0.97, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.9, 1.9, 1.0, r, g, b, 90, false, true, 2, false, nil, nil, false)
+    DrawMarker(2, pos.x, pos.y, pos.z + 0.55 + bob, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0, 0.35, 0.35, 0.35, r, g, b, 130, false, true, 2, false, nil, nil, false)
+    DrawLightWithRange(pos.x, pos.y, pos.z - 0.6, r, g, b, 1.2, 0.08)
     DrawText3D(vector3(pos.x, pos.y, pos.z + 1.0 + bob), label, r, g, b)
 end
 
@@ -2363,7 +2366,7 @@ local function PlayDragCutscene(token, monster, playerPed)
     else
         SetEntityHeading(monster, travelHeading)
         TaskGoStraightToCoord(monster, finish.x, finish.y, finish.z, 1.0, -1, travelHeading, 0.0)
-        AttachEntityToEntity(playerPed, monster, 0, 0.0, isDog and -1.05 or -0.95, isDog and -0.35 or -0.45, 0.0, 0.0, 180.0, false, false, false, false, 2, true)
+        AttachEntityToEntity(playerPed, monster, 0, 0.0, isDog and -0.45 or -0.7, isDog and -0.55 or -0.5, 0.0, 0.0, 180.0, false, false, false, false, 2, true)
     end
     if haveAnim then
         TaskPlayAnim(playerPed, dict, 'injured_drag_ped', 4.0, 4.0, -1, 1, 0.0, false, false, false)
@@ -2434,8 +2437,9 @@ local function PlayDragCutscene(token, monster, playerPed)
 
         local camPos, lookAt
         if not switched then
-            camPos = victim + side * sideDist + vector3(0.0, 0.0, 0.25)
-            lookAt = (victim + mPos) * 0.5 + vector3(0.0, 0.0, 0.15)
+            local pairMid = (victim + mPos) * 0.5
+            camPos = vector3(pairMid.x, pairMid.y, start.z - 0.35) + side * (sideDist + 0.4)
+            lookAt = pairMid + vector3(0.0, 0.0, 0.1)
         else
             local back = facingEnd + faceDir * 1.4
             camPos = vector3(back.x, back.y, start.z - 0.55)
@@ -2726,14 +2730,12 @@ function StartStalkerAI(token, m)
                 ShowNotification("It shrugs off the shock... the stun gun needs time to recharge.", 2500)
             end
 
-            local meleeHit = HasEntityBeenDamagedByWeapon(monster, WEAPON_UNARMED, 0)
-                or HasEntityBeenDamagedByWeapon(monster, WEAPON_FLASHLIGHT, 0)
-                or HasEntityBeenDamagedByWeapon(monster, 0, 1)
-            if meleeHit then
-                ClearEntityLastWeaponDamage(monster)
-                m.lastSwingHandled = meleeSwingId
-                TryPunchStun(m)
-            elseif now - lastMeleeAt < 350 and m.lastSwingHandled ~= meleeSwingId and IsMonsterInPunchReach(m) then
+            local hitByPlayer = HasEntityBeenDamagedByEntity(monster, playerPed, true)
+            if hitByPlayer then
+                ClearEntityLastDamageEntity(monster)
+            end
+            local swungRecently = meleeSwingId > 0 and now - lastMeleeAt < 600 and not cutsceneActive
+            if swungRecently and m.lastSwingHandled ~= meleeSwingId and (hitByPlayer or IsMonsterInPunchReach(m)) then
                 m.lastSwingHandled = meleeSwingId
                 TryPunchStun(m)
             end
@@ -3019,7 +3021,7 @@ function StartCluePropAnimationLoop(token)
                         SetEntityRotation(obj, 0.0, 0.0, rot, 2, true)
 
                         local pulseFactor = 0.6 + (math.sin(math.rad(pulse + i * 37.0)) + 1.0) * 0.35
-                        DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.15, 255, 220, 120, 1.6 * pulseFactor, 1.4 * pulseFactor)
+                        DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.12, 255, 210, 120, 0.9, 0.12 * pulseFactor)
                     end
                 end
                 Wait(0)
