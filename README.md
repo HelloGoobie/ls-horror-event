@@ -145,6 +145,7 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `Stun` | Torch and punch stun range, duration and cooldown |
 | `DragCutscene` | Caught cutscenes on or off, length, captions and positioning |
 | `Assist` | Behind-you warning range and stuck-hint timings |
+| `FirstPerson` | How much wider the first-person view is during the run (restored afterwards) |
 | `Atmosphere` | Colour grade, flickering ceiling lights, power surges, emergency lights, monster eyes and the scream cooldown |
 | `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
 | `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |

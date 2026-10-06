@@ -181,7 +181,7 @@ local Config = {
     },
 
     Atmosphere = {
-        Desaturate        = 0.6,
+        Desaturate        = 0.2,
         CeilingLights     = true,
         LightRange        = 5.0,
         LightIntensity    = 0.22,
@@ -192,6 +192,10 @@ local Config = {
         EmergencyLights   = true,
         MonsterEyes       = true,
         ScreechGapMs      = 8000,
+    },
+
+    FirstPerson = {
+        FovBoost = 12,
     },
 
     Assist = {
@@ -340,6 +344,8 @@ local heartbeatPlaying = false
 local monsterMoveRate = 1.0
 
 local cutsceneActive = false
+local tempThirdPerson = false
+local savedFpsFov = nil
 local cutsceneSkipped = false
 
 local aiState = "PATROL"
@@ -1301,10 +1307,37 @@ end
 -- ============================================================
 -- LOOPS
 -- ============================================================
+local function ApplyEventFov()
+    local boost = Config.FirstPerson and Config.FirstPerson.FovBoost or 0
+    if boost <= 0 or savedFpsFov then return end
+    local raw = GetConvar('profile_fpsFieldOfView', '')
+    local cur = tonumber(raw)
+    if not cur then
+        print('[HORROR] profile_fpsFieldOfView not readable, first person FOV left alone')
+        return
+    end
+    savedFpsFov = raw
+    local target
+    if cur <= 10 then
+        target = math.min(10, cur + math.max(1, math.floor(boost / 5)))
+    else
+        target = math.min(100, cur + boost)
+    end
+    ExecuteCommand(('profile_fpsFieldOfView %s'):format(target))
+    print(('[HORROR] first person FOV %s -> %s'):format(raw, tostring(target)))
+end
+
+local function RestoreEventFov()
+    if not savedFpsFov then return end
+    ExecuteCommand(('profile_fpsFieldOfView %s'):format(savedFpsFov))
+    savedFpsFov = nil
+end
+
 function StartFirstPersonLoop(token)
+    ApplyEventFov()
     CreateThread(function()
         while IsSessionActive(token) do
-            SetFollowPedCamViewMode(4)
+            SetFollowPedCamViewMode(tempThirdPerson and 1 or 4)
             Wait(0)
         end
     end)
@@ -2793,7 +2826,11 @@ function PlayDragCutscene(token, monster, playerPed)
     local victimGap = tune.Gap or 0.6
     local victimZ = pedZ + (tune.Height or -0.78)
     local victimTurn = tune.Turn or 180.0
+    SetCurrentPedWeapon(playerPed, GetHashKey("WEAPON_UNARMED"), true)
+    SetPedCanRagdoll(playerPed, false)
     SetEntityCollision(playerPed, false, false)
+    FreezeEntityPosition(playerPed, true)
+    Wait(0)
     if backwards then
         SetEntityCollision(monster, false, false)
         SetEntityCoordsNoOffset(monster, start.x, start.y, pedZ, false, false, false)
@@ -2803,9 +2840,15 @@ function PlayDragCutscene(token, monster, playerPed)
         SetEntityHeading(monster, travelHeading)
         TaskGoStraightToCoord(monster, finish.x, finish.y, finish.z, 1.0, -1, travelHeading, 0.0)
     end
-    if haveAnim then
-        TaskPlayAnim(playerPed, dict, 'injured_drag_ped', 4.0, 4.0, -1, 1, 0.0, false, false, false)
+    local function keepVictimAnim()
+        if haveAnim and not IsEntityPlayingAnim(playerPed, dict, 'injured_drag_ped', 3) then
+            TaskPlayAnim(playerPed, dict, 'injured_drag_ped', 8.0, 8.0, -1, 1, 0.0, false, false, false)
+        end
+        if backwards and not IsEntityPlayingAnim(monster, dict, 'injured_drag_plyr', 3) then
+            TaskPlayAnim(monster, dict, 'injured_drag_plyr', 8.0, 8.0, -1, 1, 0.0, false, false, false)
+        end
     end
+    keepVictimAnim()
 
     local function placeVictim()
         local mp = GetEntityCoords(monster)
@@ -2877,6 +2920,7 @@ function PlayDragCutscene(token, monster, playerPed)
             SetEntityHeading(monster, (travelHeading + 180.0) % 360.0)
         end
         placeVictim()
+        keepVictimAnim()
 
         local mPos = GetEntityCoords(monster)
         local victim = GetEntityCoords(playerPed)
@@ -2922,6 +2966,8 @@ function PlayDragCutscene(token, monster, playerPed)
     Cine("captionHide")
     Cine("cineEnd")
     DetachEntity(playerPed, true, false)
+    FreezeEntityPosition(playerPed, false)
+    SetPedCanRagdoll(playerPed, true)
     SetEntityCollision(playerPed, true, true)
     SetEntityCollision(monster, true, true)
     StopAnimTask(playerPed, dict, 'injured_drag_ped', 1.0)
@@ -3549,6 +3595,8 @@ local function DoPanelRepair(token, playerPed)
     local nextRepairNoise = 0
     local repairSuccess = true
 
+    tempThirdPerson = true
+    SetFollowPedCamViewMode(1)
     FreezeEntityPosition(playerPed, true)
     if HasAnimDictLoaded(fixingDict) then
         TaskPlayAnim(playerPed, fixingDict, fixingAnim, 8.0, -8.0, -1, 1, 0, false, false, false)
@@ -3581,6 +3629,7 @@ local function DoPanelRepair(token, playerPed)
     ClearPedTasks(playerPed)
     FreezeEntityPosition(playerPed, false)
     RemoveAnimDict(fixingDict)
+    tempThirdPerson = false
 
     if repairSuccess and IsSessionActive(token) then
         panelRepaired = true
@@ -3925,6 +3974,8 @@ function EndHorrorEvent(escaped, silent, message)
 
     local playerPed = PlayerPedId()
 
+    tempThirdPerson = false
+    RestoreEventFov()
     SetFollowPedCamViewMode(previousCamMode)
 
     if hadFlashlight then
@@ -4022,6 +4073,7 @@ AddEventHandler('onResourceStop', function(resourceName)
     if GetCurrentResourceName() ~= resourceName then return end
     SetNuiFocus(false, false)
     TriggerScreenblurFadeOut(0)
+    RestoreEventFov()
     if warningOpen then
         warningOpen = false
         FreezeEntityPosition(PlayerPedId(), false)
