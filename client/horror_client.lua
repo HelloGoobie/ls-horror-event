@@ -10,6 +10,7 @@ local Config = {
         'u_m_y_zombie_02',
         'u_m_y_zombie_03',
         'u_m_y_zombie_04',
+        'u_m_y_zombie_05',
     },
 
     QuadrupedModels = {
