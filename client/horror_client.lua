@@ -185,7 +185,12 @@ local Config = {
         DurationMs = 5200,
         Distance   = 6.0,
         Human = { Gap = 0.55, Height = -0.78, Turn = 180.0 },
-        Dog   = { Gap = 0.80, Height = -0.78, Turn = 0.0 },
+        Dog   = { Gap = 0.95, Turn = 180.0 },
+        DogLines = {
+            "It pins you to the floor...",
+            "Teeth. Everywhere.",
+            "You can't get it off you.",
+        },
         Lines = {
             "It drags you deeper into the dark...",
             "You can't break its grip.",
@@ -556,7 +561,7 @@ local function GetCamForward()
 end
 
 local function ClearDistanceTo(from, to, ignoreEntity)
-    local handle = StartExpensiveSynchronousShapeTestLosProbe(from.x, from.y, from.z, to.x, to.y, to.z, 17, ignoreEntity or 0, 7)
+    local handle = StartExpensiveSynchronousShapeTestLosProbe(from.x, from.y, from.z, to.x, to.y, to.z, 17, ignoreEntity or 0, 4)
     local _, hit, endCoords = GetShapeTestResult(handle)
     if hit == true or hit == 1 then
         return #(endCoords - from)
@@ -2393,11 +2398,175 @@ local function HandleMonsterStunned(token, m)
     end)
 end
 
+local function LoadDict(dict, ms)
+    RequestAnimDict(dict)
+    local t0 = GetGameTimer()
+    while not HasAnimDictLoaded(dict) and GetGameTimer() - t0 < (ms or 1500) do Wait(10) end
+    return HasAnimDictLoaded(dict)
+end
+
+function PlayDogMaulCutscene(token, monster, playerPed)
+    local cfg = Config.DragCutscene
+    local tune = cfg.Dog or {}
+    cutsceneActive = true
+    cutsceneSkipped = false
+
+    local start = GetEntityCoords(monster)
+    local found, groundZ = GetGroundZFor_3dCoord(start.x, start.y, start.z + 0.5, false)
+    if not found or math.abs(groundZ - start.z) > 2.5 then groundZ = start.z - 0.6 end
+    local pedZ = groundZ + 1.0
+
+    local ang = FindOpenAngle(vector3(start.x, start.y, groundZ + 0.4), 2.2, monster)
+    local dir = vector3(math.cos(math.rad(ang)), math.sin(math.rad(ang)), 0.0)
+    local victimPos = vector3(start.x, start.y, 0.0) + dir * (tune.Gap or 0.95)
+    local towardDog = -dir
+    local dogHeading = GetHeadingFromVector_2d(dir.x, dir.y)
+    local victimHeading = (GetHeadingFromVector_2d(towardDog.x, towardDog.y) + (tune.Turn or 180.0)) % 360.0
+
+    ClearPedTasksImmediately(monster)
+    ClearPedTasksImmediately(playerPed)
+    FreezeEntityPosition(monster, false)
+    FreezeEntityPosition(playerPed, false)
+    SetEntityVisible(playerPed, true, false)
+    SetEntityCollision(playerPed, false, false)
+    SetEntityInvincible(playerPed, true)
+
+    local vDict, vClip = 'combat@damage@writhe', 'writhe_loop'
+    local dDict, dClip = 'creatures@rottweiler@amb@world_dog_barking@idle_a', 'idle_a'
+    local haveVictim = LoadDict(vDict)
+    local haveDog = LoadDict(dDict)
+
+    SetEntityCoordsNoOffset(playerPed, victimPos.x, victimPos.y, pedZ, false, false, false)
+    SetEntityHeading(playerPed, victimHeading)
+    if haveVictim then
+        TaskPlayAnim(playerPed, vDict, vClip, 8.0, -8.0, -1, 1, 0.0, false, false, false)
+    else
+        SetPedToRagdoll(playerPed, cfg.DurationMs, cfg.DurationMs, 0, false, false, false)
+    end
+    SetEntityHeading(monster, dogHeading)
+    if haveDog then
+        TaskPlayAnim(monster, dDict, dClip, 8.0, -8.0, -1, 1, 0.0, false, false, false)
+    end
+
+    local mid = (vector3(start.x, start.y, 0.0) + victimPos) * 0.5
+    mid = vector3(mid.x, mid.y, groundZ + 0.45)
+    local side = vector3(-dir.y, dir.x, 0.0)
+    local freeA = ClearDistanceTo(mid, mid + side * 2.6, monster)
+    local freeB = ClearDistanceTo(mid, mid - side * 2.6, monster)
+    if freeB > freeA then side, freeA = -side, freeB end
+    local sideDist = math.max(0.9, math.min(2.2, freeA - 0.35))
+
+    local cam = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
+    SetCamFov(cam, 50.0)
+    SetCamUseShallowDofMode(cam, true)
+    SetCamNearDof(cam, 0.05)
+    SetCamDofStrength(cam, 1.0)
+    ShakeCam(cam, "HAND_SHAKE", 0.8)
+    SetCamActive(cam, true)
+    RenderScriptCams(true, false, 0, true, false)
+
+    local interior = GetInteriorAtCoords(start.x, start.y, start.z)
+    local function pinRoom()
+        local room = GetRoomKeyFromEntity(monster)
+        if interior ~= 0 and room ~= 0 and GetInteriorFromEntity(monster) == interior then
+            ForceRoomForGameViewport(interior, room)
+        end
+    end
+    SetFocusPosAndVel(start.x, start.y, start.z, 0.0, 0.0, 0.0)
+    pinRoom()
+
+    Cine("cineStart", { skip = Config.AllowCutsceneSkip })
+    local lines = cfg.DogLines or {}
+    if #lines > 0 then
+        Cine("caption", { kicker = "Caught", text = lines[math.random(#lines)], delay = 500 })
+    end
+    SendNUIMessage({ action = "stopSound", soundId = "jumpscare" })
+    SendNUIMessage({ action = "unduck" })
+    SendNUIMessage({ action = "playSound", soundId = "growl_close", volume = 0.55 })
+    DoScreenFadeIn(300)
+
+    local began = GetGameTimer()
+    local switchAt = began + math.floor(cfg.DurationMs * 0.45)
+    local switched = false
+    local nextGrowl = began + 900
+    local strobe, nextStrobe = true, 0
+    while GetGameTimer() - began < cfg.DurationMs and IsSessionActive(token) do
+        local now = GetGameTimer()
+        DisableAllControlActions(0)
+        SetEntityCoordsNoOffset(playerPed, victimPos.x, victimPos.y, pedZ, false, false, false)
+        SetEntityHeading(playerPed, victimHeading)
+        pinRoom()
+
+        local face = GetMonsterFace(monster)
+        if now >= switchAt and not switched then
+            switched = true
+            SetCamFov(cam, 58.0)
+            ShakeCam(cam, "LARGE_EXPLOSION_SHAKE", 0.18)
+            ScareRumble(400)
+        end
+
+        local camPos, lookAt
+        if not switched then
+            camPos = mid + side * sideDist + vector3(0.0, 0.0, 0.15)
+            lookAt = mid + vector3(0.0, 0.0, 0.05)
+        else
+            local head = vector3(victimPos.x, victimPos.y, groundZ + 0.22) + dir * 0.55
+            camPos = head
+            lookAt = face
+        end
+        SetCamCoord(cam, camPos.x, camPos.y, camPos.z)
+        PointCamAtCoord(cam, lookAt.x, lookAt.y, lookAt.z)
+        SetCamFarDof(cam, #(camPos - lookAt) + 1.2)
+        SetUseHiDof()
+
+        if now >= nextGrowl then
+            nextGrowl = now + math.random(700, 1300)
+            SendNUIMessage({ action = "playSound", soundId = "growl_close", volume = switched and 0.6 or 0.4 })
+        end
+        if now >= nextStrobe then
+            strobe = not strobe
+            nextStrobe = now + (switched and math.random(60, 160) or math.random(150, 400))
+        end
+        if strobe then
+            DrawLightWithRange(face.x, face.y, face.z + 0.15, 210, 12, 12, 1.8, switched and 1.6 or 0.9)
+        end
+        DrawLightWithRange(camPos.x, camPos.y, camPos.z + 0.5, 150, 165, 200, 2.5, 0.35)
+
+        if IsSkipPressed() then break end
+        Wait(0)
+    end
+
+    DoScreenFadeOut(400)
+    Wait(420)
+    Cine("captionHide")
+    Cine("cineEnd")
+    StopAnimTask(playerPed, vDict, vClip, 1.0)
+    StopAnimTask(monster, dDict, dClip, 1.0)
+    ClearPedTasksImmediately(playerPed)
+    ClearPedTasksImmediately(monster)
+    SetEntityCollision(playerPed, true, true)
+    SetEntityInvincible(playerPed, false)
+    RenderScriptCams(false, false, 0, true, false)
+    DestroyCam(cam, false)
+    ClearRoomForEntity(playerPed)
+    ClearRoomForEntity(monster)
+    ClearRoomForGameViewport()
+    ClearFocus()
+    RemoveAnimDict(vDict)
+    RemoveAnimDict(dDict)
+    cutsceneSkipped = false
+    cutsceneActive = false
+    return true
+end
+
 function PlayDragCutscene(token, monster, playerPed)
     local cfg = Config.DragCutscene
     if not cfg or not cfg.Enabled or not DoesEntityExist(monster) or not IsSessionActive(token) then return false end
 
     local isDog = quadrupedPeds[monster] == true
+    if isDog then
+        return PlayDogMaulCutscene(token, monster, playerPed)
+    end
     cutsceneActive = true
     cutsceneSkipped = false
 
