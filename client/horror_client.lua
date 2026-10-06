@@ -221,7 +221,7 @@ local Config = {
         Enabled    = true,
         DurationMs = 5200,
         Distance   = 6.0,
-        Human = { Gap = 0.55, Height = 0.0, Turn = 180.0, PelvisLift = 0.16, AutoAlign = true },
+        Human = { Gap = 0.55, Height = 0.0, Turn = 0.0, PelvisLift = 0.16, AutoAlign = true },
         Dog   = { Gap = 0.95, Turn = 180.0 },
         DogLines = {
             "It pins you to the floor...",
