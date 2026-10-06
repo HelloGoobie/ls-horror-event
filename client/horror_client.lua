@@ -221,7 +221,7 @@ local Config = {
         Enabled    = true,
         DurationMs = 5200,
         Distance   = 6.0,
-        Human = { Gap = 0.55, Height = -0.78, Turn = 180.0 },
+        Human = { Gap = 0.55, Height = 0.0, Turn = 180.0 },
         Dog   = { Gap = 0.95, Turn = 180.0 },
         DogLines = {
             "It pins you to the floor...",
@@ -2868,7 +2868,7 @@ function PlayDragCutscene(token, monster, playerPed)
     local backwards = not isDog and haveAnim
     local tune = (isDog and cfg.Dog) or cfg.Human or {}
     local victimGap = tune.Gap or 0.6
-    local victimZ = pedZ + (tune.Height or -0.78)
+    local victimZ = pedZ + (tune.Height or 0.0)
     local victimTurn = tune.Turn or 180.0
     SetCurrentPedWeapon(playerPed, GetHashKey("WEAPON_UNARMED"), true)
     SetEntityCollision(playerPed, false, false)
