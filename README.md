@@ -51,7 +51,8 @@ while an Outlast-style monster hunts them through the building.
 - **Accessibility.** The warning screen has a reduce-flashing toggle and a scare
   volume slider. Your choices and last difficulty are remembered.
 - **Atmosphere.** Dim fluorescent lights that stutter
-  and die, occasional power surges and red emergency lights by the exits.
+  and die, occasional power surges and red emergency lights by the exits. The
+  minimap is hidden for the whole run.
 - **Quality of life.** A dark vignette and faint growls warn you when something is
   close behind you, whispers hint at where to look if you're stuck, and dead fuses
   keep a dim red glint so you don't go back to them.
