@@ -74,6 +74,37 @@
         #hurt.hit { animation: hurt 3.2s ease-out forwards; }
         @keyframes hurt { 0% { opacity: 1; } 15% { opacity: .75; } 30% { opacity: .95; } 100% { opacity: 0; } }
 
+        /* ---------------- Something behind you ---------------- */
+        #behind { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .35s ease;
+                  background: radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,.55) 76%, rgba(45,0,0,.88) 100%); }
+
+        /* ---------------- Run summary ---------------- */
+        #summary {
+            position: fixed; right: 4vw; top: 50%; z-index: 8; width: min(380px, 90vw);
+            padding: 26px 28px 20px; border-radius: 18px; background: var(--card);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(18px); pointer-events: none;
+            opacity: 0; transform: translate(28px, -50%);
+            transition: opacity .45s ease, transform .55s cubic-bezier(.2, .8, .2, 1);
+        }
+        #summary.show { opacity: 1; transform: translate(0, -50%); }
+        #summary::before { content: ""; position: absolute; left: 28px; right: 28px; top: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent, var(--red)), transparent); }
+        #summary .kick { font-size: 11px; font-weight: 600; letter-spacing: .28em; color: var(--accent, var(--red)); }
+        #summary h2 { margin: 8px 0 2px; font-family: var(--serif); font-weight: 600; font-size: 34px; line-height: 1.05; }
+        #summary .tag { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+        #summary .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+        #summary .stat { padding: 9px 12px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.05); }
+        #summary .stat small { display: block; font-size: 10.5px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+        #summary .stat b { display: block; margin-top: 2px; font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+        #summary .stat.wide { grid-column: 1 / -1; }
+        #summary .extra { display: grid; gap: 6px; margin-bottom: 12px; }
+        #summary .extra:empty { display: none; }
+        #summary .line { font-size: 13px; padding: 8px 12px; border-radius: 10px; background: rgba(255, 196, 61, .08); border: 1px solid rgba(255, 196, 61, .22); color: #ffd774; }
+        #summary .line.title { background: rgba(157, 78, 221, .10); border-color: rgba(157, 78, 221, .3); color: #d6a8ff; }
+        #summary .dismiss { font-size: 11px; color: rgba(255,255,255,.4); text-align: right; }
+
         /* ---------------- Content warning ---------------- */
         #warning {
             position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -155,6 +186,20 @@
         }
 
         .actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+        .access { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin: 0 0 20px; }
+        .toggle {
+            padding: 10px 14px; border-radius: 12px; font-size: 12.5px; font-weight: 500;
+            background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); color: var(--muted);
+        }
+        .toggle::before { content: ""; width: 26px; height: 15px; border-radius: 999px; background: rgba(255,255,255,.14);
+            box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); transition: background .2s ease; display: inline-block; vertical-align: middle; }
+        .toggle[aria-pressed="true"] { color: var(--ink); border-color: rgba(229, 56, 59, .45); }
+        .toggle[aria-pressed="true"]::before { background: var(--red); }
+        .vol { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 12px; font-size: 12.5px;
+            background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); color: var(--muted); }
+        .vol input { flex: 1; accent-color: var(--red); min-width: 60px; }
+        .vol span { width: 36px; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
 
         .diff { margin: 0 0 22px; }
         .diff-label { font-size: 11px; font-weight: 600; letter-spacing: .16em; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
@@ -254,6 +299,17 @@
     </div>
     <div id="hide"></div>
     <div id="hurt"></div>
+    <div id="behind"></div>
+
+    <!-- Run summary -->
+    <div id="summary" aria-hidden="true">
+        <div class="kick" id="sumKick"></div>
+        <h2 id="sumTitle"></h2>
+        <div class="tag" id="sumTag"></div>
+        <div class="stats" id="sumStats"></div>
+        <div class="extra" id="sumExtra"></div>
+        <div class="dismiss"><kbd>BACKSPACE</kbd> to close</div>
+    </div>
 
     <!-- Content warning -->
     <div id="warning" aria-hidden="true">
@@ -290,6 +346,11 @@
                     <button data-diff="hard"><b>Hard</b><small>Two or more. Faster, sharper senses, and your taser is less reliable.</small></button>
                     <button data-diff="extreme"><b>EXTREME</b><small>Three or more. Up to 12 fuses, 3 catches, 2 minutes to escape. Rarely a taser.</small></button>
                 </div>
+            </div>
+
+            <div class="access">
+                <button class="toggle" id="tglFlash" aria-pressed="false">Reduce flashing</button>
+                <label class="vol">Scare volume <input type="range" id="rngVol" min="0" max="100" step="5" value="100"><span id="volVal">100%</span></label>
             </div>
 
             <p class="note">If you're sensitive to any of the above, please take care. You can leave at any time with <code>/stopHorror</code>.</p>
@@ -332,8 +393,24 @@
         }
         document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => setDifficulty(b.dataset.diff)));
 
-        function showWarning(defaultDiff) {
+        let reduceFlash = false, scareVolume = 100;
+        const SCARY = { jumpscare: true, screech: true, growl_close: true };
+        function applySettingsUI() {
+            $("tglFlash").setAttribute("aria-pressed", reduceFlash ? "true" : "false");
+            $("rngVol").value = scareVolume;
+            $("volVal").textContent = scareVolume + "%";
+        }
+        function setSettings(rf, vol) {
+            if (typeof rf === "boolean") reduceFlash = rf;
+            if (vol !== undefined && vol !== null && isFinite(Number(vol))) scareVolume = Math.max(0, Math.min(100, Number(vol)));
+            applySettingsUI();
+        }
+        $("tglFlash").addEventListener("click", () => { reduceFlash = !reduceFlash; applySettingsUI(); });
+        $("rngVol").addEventListener("input", (e) => { scareVolume = Number(e.target.value); $("volVal").textContent = scareVolume + "%"; });
+
+        function showWarning(defaultDiff, rf, vol) {
             warningOpen = true;
+            setSettings(rf, vol);
             setDifficulty(defaultDiff || "easy");
             const w = $("warning");
             w.classList.remove("show"); void w.offsetWidth; w.classList.add("show");
@@ -348,13 +425,14 @@
         function answerWarning(accepted) {
             if (!warningOpen) return;
             hideWarning();
-            post("warningResult", { accepted, difficulty });
+            post("warningResult", { accepted, difficulty, reduceFlash, scareVolume });
         }
         $("btnAccept").addEventListener("click", () => answerWarning(true));
         $("btnCancel").addEventListener("click", () => answerWarning(false));
         window.addEventListener("keydown", (e) => {
             if (!warningOpen) return;
             if (e.key === "Enter") { e.preventDefault(); answerWarning(true); }
+            else if (document.activeElement === $("rngVol") && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { return; }
             else if (e.key === "ArrowLeft") { e.preventDefault(); setDifficulty(DIFFS[Math.max(0, DIFFS.indexOf(difficulty) - 1)]); }
             else if (e.key === "ArrowRight") { e.preventDefault(); setDifficulty(DIFFS[Math.min(DIFFS.length - 1, DIFFS.indexOf(difficulty) + 1)]); }
             else if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); answerWarning(false); }
@@ -418,6 +496,64 @@
             const el = $("hide");
             el.className = kind ? ("show " + kind) : "";
         }
+        function fmtTime(s) {
+            s = Math.max(0, Math.floor(Number(s) || 0));
+            return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+        }
+        function el(tag, cls, text) {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (text !== undefined) e.textContent = text;
+            return e;
+        }
+        const RESULT_TEXT = {
+            escaped: { kick: "ESCAPED", title: "You got out.", accent: "#4ade80" },
+            caught:  { kick: "CONSUMED", title: "It got you.", accent: "#e5383b" },
+            ended:   { kick: "RUN ENDED", title: "You left the morgue.", accent: "#a1a1aa" },
+        };
+        const DIFF_TEXT = { easy: "Easy", hard: "Hard", extreme: "EXTREME" };
+        function stat(label, value, wide) {
+            const s = el("div", "stat" + (wide ? " wide" : ""));
+            s.appendChild(el("small", null, label));
+            s.appendChild(el("b", null, value));
+            return s;
+        }
+        function showSummary(d) {
+            const r = RESULT_TEXT[d.result] || RESULT_TEXT.ended;
+            const box = $("summary");
+            box.style.setProperty("--accent", r.accent);
+            $("sumKick").textContent = r.kick;
+            $("sumTitle").textContent = r.title;
+            $("sumTag").textContent = (DIFF_TEXT[d.difficulty] || "Easy") + (d.debug ? "  ·  practice run (debug)" : "");
+            const st = $("sumStats");
+            st.replaceChildren(
+                stat("Time", fmtTime(d.seconds)),
+                stat("Caught", (d.caught || 0) + " / " + (d.maxCatches || 5)),
+                stat("Fuses", (d.fuses || 0) + " / " + (d.fusesNeeded || 0)),
+                stat("Stuns", String(d.stuns || 0)),
+            );
+            st.lastChild.dataset.k = "stuns";
+            st.firstChild.id = "sumTime";
+            if (d.item) st.appendChild(stat("Found", d.item, true));
+            $("sumExtra").replaceChildren();
+            box.classList.add("show");
+            box.setAttribute("aria-hidden", "false");
+        }
+        function summaryResult(d) {
+            if (d.seconds !== undefined) {
+                const t = $("sumTime");
+                if (t) t.querySelector("b").textContent = fmtTime(d.seconds);
+            }
+            const ex = $("sumExtra");
+            if (d.rank) ex.appendChild(el("div", "line", "#" + d.rank + " on the leaderboard" + (d.personalBest ? "  ·  new personal best!" : "")));
+            else if (d.personalBest) ex.appendChild(el("div", "line", "New personal best!"));
+            (d.titles || []).forEach(t => ex.appendChild(el("div", "line title", "Title unlocked: " + t)));
+        }
+        function hideSummary() {
+            $("summary").classList.remove("show");
+            $("summary").setAttribute("aria-hidden", "true");
+        }
+
         function hurt() {
             const el = $("hurt");
             el.classList.remove("hit"); void el.offsetWidth; el.classList.add("hit");
@@ -497,7 +633,12 @@
         window.addEventListener("message", (event) => {
             const data = event.data || {};
             switch (data.action) {
-                case "showWarning": showWarning(data.difficulty); break;
+                case "showWarning": showWarning(data.difficulty, data.reduceFlash, data.scareVolume); break;
+                case "settings":    setSettings(data.reduceFlash, data.scareVolume); break;
+                case "summary":       showSummary(data); break;
+                case "summaryResult": summaryResult(data); break;
+                case "summaryHide":   hideSummary(); break;
+                case "behind":      $("behind").style.opacity = String(Math.max(0, Math.min(1, Number(data.level) || 0))); break;
                 case "hideWarning": hideWarning(); break;
 
                 case "cineStart":   cineStart(data.skip); break;
@@ -527,7 +668,7 @@
 
                 case "playSound":
                     if (ducked && !DUCK_ALLOWED[data.soundId] && !data.force) break;
-                    playSoundFile(data.soundId, data.loop || false, data.volume ?? 1.0, data.speed ?? 1.0, data.maxMs || 0);
+                    playSoundFile(data.soundId, data.loop || false, (data.volume ?? 1.0) * (SCARY[data.soundId] ? scareVolume / 100 : 1), data.speed ?? 1.0, data.maxMs || 0);
                     break;
                 case "stopSound": stopSound(data.soundId); break;
                 case "stopAll":

@@ -180,6 +180,14 @@ local Config = {
         },
     },
 
+    Assist = {
+        BehindRange      = 9.0,
+        BehindDot        = -0.25,
+        StuckHintSeconds = 240,
+        RepeatHintSeconds = 180,
+        ExitHintAtSeconds = 75,
+    },
+
     DragCutscene = {
         Enabled    = true,
         DurationMs = 5200,
@@ -351,6 +359,13 @@ local taserShotsLeft = nil
 local lastTaserShot = 0
 local bottles = 0
 local lastMeleeAt = 0
+local deadFuses = {}
+local runStartedAt = 0
+local lastProgressAt = 0
+local exitHintShown = false
+local reduceFlash = GetResourceKvpInt('horror_reduceFlash') == 1
+local scareVolume = GetResourceKvpInt('horror_scareVolumeSet') == 1 and GetResourceKvpInt('horror_scareVolume') or 100
+local summaryUntil = 0
 local meleeSwingId = 0
 local triedExits = {}
 local runStats = nil
@@ -656,6 +671,17 @@ end)
 
 RegisterNUICallback('warningResult', function(data, cb)
     cb({})
+    if data and data.accepted == true then
+        if data.difficulty and Config.Difficulty[data.difficulty] then
+            SetResourceKvp('horror_difficulty', data.difficulty)
+        end
+        reduceFlash = data.reduceFlash == true
+        SetResourceKvpInt('horror_reduceFlash', reduceFlash and 1 or 0)
+        local vol = math.floor(tonumber(data.scareVolume) or scareVolume)
+        scareVolume = math.max(0, math.min(100, vol))
+        SetResourceKvpInt('horror_scareVolume', scareVolume)
+        SetResourceKvpInt('horror_scareVolumeSet', 1)
+    end
     ResolveWarning(data and data.accepted == true, data and data.difficulty)
 end)
 
@@ -672,7 +698,9 @@ function ShowContentWarningPrompt(onResult)
     DisplayRadar(false)
     TriggerScreenblurFadeIn(400)
 
-    SendNUIMessage({ action = "showWarning", difficulty = Config.DefaultDifficulty })
+    local saved = GetResourceKvpString('horror_difficulty')
+    if not saved or not Config.Difficulty[saved] then saved = Config.DefaultDifficulty end
+    SendNUIMessage({ action = "showWarning", difficulty = saved, reduceFlash = reduceFlash, scareVolume = scareVolume })
     SetNuiFocus(true, true)
 end
 
@@ -929,7 +957,7 @@ function PlayIntroCutscene(token, onComplete)
                 local c = PushInShot({
                     subject = mCoords, lookAt = face, camHeight = quadrupedPeds[monsterPed] and 0.1 or 0.35,
                     far = 4.5, near = 2.0, durationMs = shotMs + 1200, ignore = monsterPed,
-                    flicker = true, fovFrom = Config.Cinematic.FOV + 6.0, fovTo = Config.Cinematic.FOV - 6.0,
+                    flicker = not reduceFlash, fovFrom = Config.Cinematic.FOV + 6.0, fovTo = Config.Cinematic.FOV - 6.0,
                 })
                 return c
             end)
@@ -1015,6 +1043,11 @@ function StartHorrorEvent(chosenDifficulty)
 
     isEventActive = true
     TriggerServerEvent('horror:runStarted')
+    runStartedAt = GetGameTimer()
+    lastProgressAt = GetGameTimer()
+    summaryUntil = 0
+    SendNUIMessage({ action = "summaryHide" })
+    SendNUIMessage({ action = "settings", reduceFlash = reduceFlash, scareVolume = scareVolume })
     countdownTimer = Config.HeadStartSeconds
     timesCaught = 0
     flashlightBattery = 100.0
@@ -1060,6 +1093,8 @@ function StartHorrorEvent(chosenDifficulty)
     bottles = (taserMode == 'none') and Config.Unarmed.Bottles or 0
     lastMeleeAt, meleeSwingId = 0, 0
     triedExits = {}
+    deadFuses = {}
+    exitHintShown = false
     runStats = {
         difficulty = difficulty, monsters = 0, startedNoTaser = taserMode == 'none',
         caught = 0, fuses = 0, stuns = 0, tasersFired = 0, bottlesThrown = 0, lures = 0,
@@ -1165,6 +1200,7 @@ function StartHorrorEvent(chosenDifficulty)
     StartHidingLoop(token)
     StartSecondWindLoop(token)
     StartTorchStunLoop(token)
+    StartAssistLoop(token)
 
     local wanted = Diff().monsters + ((math.random() < (Diff().extraMonsterChance or 0)) and 1 or 0)
 
@@ -1194,6 +1230,7 @@ function StartHorrorEvent(chosenDifficulty)
                     local count = #LiveMonsters()
                     ShowNotification(count > 1 and ("THERE ARE %d OF THEM. FIND THE FUSES."):format(count) or "IT IS COMING. FIND THE FUSES.", 5000)
                     chaseStartTime = GetGameTimer()
+                    lastProgressAt = GetGameTimer()
                     for _, m in ipairs(LiveMonsters()) do
                         StartStalkerAI(token, m)
                     end
@@ -1757,6 +1794,86 @@ local function DrawDoorMarker(pos, r, g, b, label)
     end
 end
 
+local function FloorPhrase(dz)
+    if dz > 2.5 then return 'above' elseif dz < -2.5 then return 'below' end
+    return 'same'
+end
+
+function StartAssistLoop(token)
+    CreateThread(function()
+        local a = Config.Assist
+        local lastLevel = 0.0
+        local nextBreath = 0
+        while IsSessionActive(token) do
+            local now = GetGameTimer()
+            local ped = PlayerPedId()
+            local level = 0.0
+            if not cutsceneActive and not playerHidden and not debugGhost then
+                local camPos = GetGameplayCamCoord()
+                local fwd = GetCamForward()
+                local pPos = GetEntityCoords(ped)
+                for _, m in ipairs(LiveMonsters()) do
+                    if not IsMonsterStunned(m) then
+                        local mp = GetEntityCoords(m.ped)
+                        local d = #(mp - pPos)
+                        if d < a.BehindRange and math.abs(mp.z - pPos.z) < 3.0 then
+                            local to = mp - camPos
+                            local len = #to
+                            local dot = len > 0.01 and (to.x * fwd.x + to.y * fwd.y + to.z * fwd.z) / len or 1.0
+                            if dot < a.BehindDot then
+                                level = math.max(level, 1.0 - d / a.BehindRange)
+                            end
+                        end
+                    end
+                end
+            end
+            if math.abs(level - lastLevel) > 0.04 or (level == 0.0 and lastLevel ~= 0.0) then
+                lastLevel = level
+                SendNUIMessage({ action = "behind", level = level })
+            end
+            if level > 0.45 and now >= nextBreath then
+                nextBreath = now + math.random(5000, 8000)
+                SendNUIMessage({ action = "playSound", soundId = "growl_far", volume = 0.08 + 0.12 * level })
+            end
+
+            if not cutsceneActive then
+                local pPos = GetEntityCoords(ped)
+                if not panelRepaired and fusesCollected < totalFusesRequired
+                    and now - lastProgressAt > a.StuckHintSeconds * 1000 then
+                    local best, bestD
+                    for i, pos in ipairs(activeFuseCoords) do
+                        if clueObjects[i] and realFuseIndices[i] then
+                            local d = #(pos - pPos)
+                            if not bestD or d < bestD then best, bestD = pos, d end
+                        end
+                    end
+                    if best then
+                        local where = FloorPhrase(best.z - pPos.z)
+                        local text = where == 'above' and "Something glints somewhere above you..."
+                            or where == 'below' and "Something hums beneath your feet..."
+                            or "It's close. Somewhere on this floor..."
+                        Cine("caption", { kicker = "A whisper", text = text })
+                        SetTimeout(6000, function() if not cutsceneActive then Cine("captionHide") end end)
+                    end
+                    lastProgressAt = now - (a.StuckHintSeconds - a.RepeatHintSeconds) * 1000
+                elseif panelRepaired and not exitHintShown and escapeTimerSeconds > 0
+                    and escapeTimerSeconds <= a.ExitHintAtSeconds then
+                    exitHintShown = true
+                    local e = Config.ExitPoints[actualRealExitIndex].coords
+                    local where = FloorPhrase(e.z - pPos.z)
+                    local text = where == 'above' and "The way out is above you. Hurry."
+                        or where == 'below' and "The way out is below you. Hurry."
+                        or "The way out is on this floor. Hurry."
+                    Cine("caption", { kicker = "A whisper", text = text })
+                    SetTimeout(6000, function() if not cutsceneActive then Cine("captionHide") end end)
+                end
+            end
+            Wait(100)
+        end
+        SendNUIMessage({ action = "behind", level = 0 })
+    end)
+end
+
 function StartTorchStunLoop(token)
     CreateThread(function()
         local st = Config.Stun
@@ -2278,7 +2395,7 @@ local function TriggerFaceScare(monster, playerPed)
     SendNUIMessage({ action = "playSound", soundId = "jumpscare", volume = js.Volume, maxMs = js.SoundMaxMs })
     SendNUIMessage({ action = "playSound", soundId = "screech", volume = js.Volume * 0.8 })
     AnimpostfxStop("FocusIn")
-    AnimpostfxPlay("ExplosionJosh3", 0, false)
+    if not reduceFlash then AnimpostfxPlay("ExplosionJosh3", 0, false) end
     AnimpostfxPlay("Rampage", 0, true)
     ShakeCam(scareCam, "LARGE_EXPLOSION_SHAKE", 0.8)
     ScareRumble(js.HoldMs + js.LungeMs)
@@ -2301,11 +2418,11 @@ local function TriggerFaceScare(monster, playerPed)
         AimCam(scareCam, camPos, faceTarget, roll + (math.random() - 0.5) * 1.5)
         SetCamFov(scareCam, 100.0 - (30.0 * eased))
 
-        if js.Strobe and now >= nextStrobe then
+        if js.Strobe and not reduceFlash and now >= nextStrobe then
             strobeOn = not strobeOn
             nextStrobe = now + math.random(70, 130)
         end
-        if strobeOn or not js.Strobe then
+        if strobeOn or not js.Strobe or reduceFlash then
             DrawLightWithRange(camPos.x, camPos.y, camPos.z, 255, 255, 255, 4.0, 40.0)
         else
             local under = headPos + (fwd * 0.30) - vector3(0.0, 0.0, 0.30)
@@ -2346,7 +2463,7 @@ local function TriggerDoubleScare(monster)
 
     DoScreenFadeIn(0)
     SendNUIMessage({ action = "playSound", soundId = "screech", volume = js.Volume })
-    AnimpostfxPlay("ExplosionJosh3", 0, false)
+    if not reduceFlash then AnimpostfxPlay("ExplosionJosh3", 0, false) end
     ShakeCam(cam, "LARGE_EXPLOSION_SHAKE", 1.0)
     ScareRumble(200)
 
@@ -2527,7 +2644,7 @@ function PlayDogMaulCutscene(token, monster, playerPed)
             strobe = not strobe
             nextStrobe = now + (switched and math.random(60, 160) or math.random(150, 400))
         end
-        if strobe then
+        if strobe or reduceFlash then
             DrawLightWithRange(face.x, face.y, face.z + 0.15, 210, 12, 12, 1.8, switched and 1.6 or 0.9)
         end
         DrawLightWithRange(camPos.x, camPos.y, camPos.z + 0.5, 150, 165, 200, 2.5, 0.35)
@@ -2718,7 +2835,7 @@ function PlayDragCutscene(token, monster, playerPed)
             flick = math.random() < 0.7
             nextFlick = now + (flick and math.random(80, 420) or math.random(40, 140))
         end
-        if flick then
+        if flick or reduceFlash then
             DrawLightWithRange(camPos.x, camPos.y, camPos.z + 0.6, 170, 185, 220, 3.5, 2.2)
         end
         DrawLightWithRange(face.x, face.y, face.z + 0.1, 200, 10, 10, 1.6, 1.2)
@@ -3310,8 +3427,12 @@ function StartCluePropAnimationLoop(token)
                         local oCoords = GetEntityCoords(obj)
                         SetEntityRotation(obj, 0.0, 0.0, rot, 2, true)
 
-                        local pulseFactor = 0.6 + (math.sin(math.rad(pulse + i * 37.0)) + 1.0) * 0.35
-                        DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.12, 255, 210, 120, 0.9, 0.12 * pulseFactor)
+                        if deadFuses[i] then
+                            DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.12, 255, 30, 20, 0.7, 0.10)
+                        else
+                            local pulseFactor = 0.6 + (math.sin(math.rad(pulse + i * 37.0)) + 1.0) * 0.35
+                            DrawLightWithRange(oCoords.x, oCoords.y, oCoords.z + 0.12, 255, 210, 120, 0.95, 0.145 * pulseFactor)
+                        end
                     end
                 end
                 Wait(0)
@@ -3389,6 +3510,7 @@ local function DoPanelRepair(token, playerPed)
 
     if repairSuccess and IsSessionActive(token) then
         panelRepaired = true
+        lastProgressAt = GetGameTimer()
         ShowNotification(("Control panel repaired! Find the exit within %d:%02d!")
             :format(math.floor(EscapeSeconds() / 60), EscapeSeconds() % 60), 6000)
         PlaySoundFrontend(-1, "HACKING_SUCCESS", "HUD_AWARDS_SOUNDSET", true)
@@ -3553,6 +3675,7 @@ function StartObjectiveLoop(token)
 
                             if IsControlJustReleased(0, 38) then
                                 fusesCollected = fusesCollected + 1
+                                lastProgressAt = GetGameTimer()
                                 if runStats then runStats.fuses = runStats.fuses + 1 end
                                 table.insert(collectedFuseStack, i)
                                 if DoesEntityExist(clueObjects[i]) then
@@ -3568,10 +3691,13 @@ function StartObjectiveLoop(token)
                                 end
                                 PlaySoundFrontend(-1, "CHALLENGE_UNLOCKED", "HUD_AWARDS_SOUNDSET", true)
                             end
+                        elseif deadFuses[i] then
+                            ShowHelp("A dead fuse. Leave it.")
                         else
                             ShowHelp("Press ~INPUT_CONTEXT~ to pick up the fuse")
 
                             if IsControlJustReleased(0, 38) then
+                                deadFuses[i] = true
                                 PlaySoundFrontend(-1, "OOB_Cancel", "GTAO_FM_Events_Soundset", true)
                                 ShowNotification("It crumbles in your hand - a dead fuse. That was loud.", 2500)
                                 MakeNoise(cluePos, Config.Hunter.NoiseDecoy)
@@ -3670,12 +3796,53 @@ end
 -- ============================================================
 -- EVENT END
 -- ============================================================
+function ShowRunSummary(card)
+    SendNUIMessage(card)
+    summaryUntil = GetGameTimer() + 15000
+    CreateThread(function()
+        while GetGameTimer() < summaryUntil and not isEventActive do
+            if IsControlJustPressed(0, 177) then break end
+            Wait(0)
+        end
+        if not isEventActive then
+            SendNUIMessage({ action = "summaryHide" })
+        end
+        summaryUntil = 0
+    end)
+end
+
+RegisterNetEvent('horror:runResult', function(result)
+    if type(result) ~= 'table' then return end
+    SendNUIMessage({
+        action = "summaryResult",
+        seconds = result.seconds, rank = result.rank, personalBest = result.personalBest == true,
+        previousBest = result.previousBest, titles = result.titles or {},
+    })
+    if summaryUntil > 0 then summaryUntil = math.max(summaryUntil, GetGameTimer() + 8000) end
+end)
+
 function EndHorrorEvent(escaped, silent, message)
     if not isEventActive then return end
     isEventActive = false
     local summary = runStats or {}
     summary.escaped = escaped == true
+    local card = {
+        action = "summary",
+        result = escaped and 'escaped' or (timesCaught >= MaxCatches() and 'caught' or 'ended'),
+        difficulty = difficulty,
+        seconds = math.floor((GetGameTimer() - runStartedAt) / 1000),
+        caught = timesCaught, maxCatches = MaxCatches(),
+        fuses = fusesCollected, fusesNeeded = totalFusesRequired,
+        item = (eggFound and eggItem) and eggItem.label or nil,
+        stuns = summary.stuns or 0, lures = summary.lures or 0,
+        debug = summary.debug == true,
+    }
     TriggerServerEvent('horror:runEnded', summary)
+    SendNUIMessage({ action = "behind", level = 0 })
+    CreateThread(function()
+        Wait(silent and 900 or 1700)
+        ShowRunSummary(card)
+    end)
     runStats = nil
     panelRepaired = false
     cutsceneActive = false

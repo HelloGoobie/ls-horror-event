@@ -20,8 +20,39 @@ while an Outlast-style monster hunts them through the building.
   get in, it will drag you out.
 - **Camcorder night vision.** See in the dark without being seen, at the cost of
   battery shared with the flashlight.
-- **Objectives.** Between 1 and 5 real fuses are hidden among decoys, then
-  there's a timed escape through one real exit out of five.
+- **Difficulty.** Choose Easy, Hard or EXTREME on the content warning. Hard spawns
+  two sprinting monsters (sometimes three) that see and hear further and react faster.
+  Extreme spawns three or four, needs up to 12 fuses, allows only 3 catches and gives
+  you 2 minutes to escape.
+- **Taser roulette.** Each run you might get a full taser, one with only 2
+  charges, or none at all. Harder modes roll the worse outcomes more often.
+- **Fight back.** Shine the torch in its face to make it recoil, or punch it
+  (normal GTA melee) to knock it down for a few seconds. Both have a cooldown.
+- **Surviving without a taser.** No-taser runs give you throwable bottles that
+  lure the monster to the noise, an adrenaline burst when it gets close, and a
+  monster that's a little slower and gives up the chase sooner.
+- **Easter eggs.** One hidden item per run: a key card that reveals the real
+  exit, spare batteries, a teddy that gives back a life, a taser stun pack or a
+  lore tape. Each can be found once per run.
+- **Staff Note.** A 5% chance per run that the easter egg is a Staff Note,
+  given by the server.
+- **Stats and chat titles.** The server keeps each player's lifetime stats and
+  unlocks chat titles for milestones and challenge runs.
+- **Objectives.** Real fuses are hidden among identical dead ones (3–6 on Easy, up
+  to 10 on Hard, up to 12 on Extreme), then there's a timed escape through one real
+  exit out of five. The wrong doors teleport you somewhere else in the building.
+- **Caught cutscenes.** Human monsters drag you away down the corridor; dogs pin
+  you to the floor.
+- **Private runs.** Each player is put in their own routing bucket during a run, so
+  players in the event can't see each other.
+- **Run summary and leaderboard.** Every run ends with a summary card: time, catches,
+  fuses, item found, leaderboard rank, personal best and any titles unlocked.
+  `/horrortop` shows the fastest escapes per difficulty.
+- **Accessibility.** The warning screen has a reduce-flashing toggle and a scare
+  volume slider. Your choices and last difficulty are remembered.
+- **Quality of life.** A dark vignette and faint growls warn you when something is
+  close behind you, whispers hint at where to look if you're stuck, and dead fuses
+  keep a dim red glint so you don't go back to them.
 - **Cinematic intro.** Letterboxed shots of the monster, a fuse, the control
   panel and the exit, with captions. Players can skip it.
 - **Jumpscares.** A full-screen catch scare with a chance of a second one in the
@@ -58,15 +89,19 @@ The entrance appears on the map as a red blip at the hospital.
 | --- | --- |
 | `E` | Enter the event, pick up fuses, search, repair, try exits, hide |
 | `TAB` | Swap between flashlight and stun gun |
+| `G` | Throw a bottle (no-taser runs only) |
+| `R` / `Left click` | Punch, which knocks the monster down for a few seconds |
+| `Backspace` | Close the run summary |
 | `N` | Camcorder night vision (rebindable in Settings › Key Bindings › FiveM) |
 | `CTRL` | Crouch, which makes you quieter and harder to see |
 | `Right mouse` | Aim the flashlight |
 | `Space` | Skip the intro |
 | `Enter` / `Esc` | Accept or decline the content warning |
+| `←` / `→` | Choose the difficulty on the content warning |
 
 1. Collect the required number of **glowing** fuses. The dimmer ones are decoys,
    and searching them makes noise.
-2. Repair the **control panel**. It takes 10 seconds and is loud.
+2. Repair the **control panel**. It takes 15 seconds and is loud.
 3. Find the **real exit** before the escape timer ends. The wrong doors are dead
    ends.
 
@@ -81,9 +116,15 @@ five catches, the event is over.
 | `/stopHorror` | Leave the event |
 | `/horrorspot` | Add a hiding spot where you're standing, facing the way you want to peek |
 | `/horrorspot low` | Same, for under-a-bed style spots |
+| `/horroreggspot` | Add an easter egg spot where you're standing |
+| `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
+| `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
+| `/horrordragtest` | Testing only, with `/horrordebug` on: replay the caught cutscene with the nearest monster |
+| `/horrordebug` | Testing only: the monsters ignore you, and hiding and egg spots are shown as markers. Runs with debug on don't count towards stats or rewards |
 
-`/horrorspot` adds the spot for the current session and prints a line in the F8
-console. Paste that line into `Config.HidingSpots` to keep it.
+`/horrorspot` and `/horroreggspot` add the spot for the current session and
+print a line in the F8 console. Paste it into `Config.HidingSpots` or
+`Config.EasterEggs.extraSpots` to keep it.
 
 ## Configuration
 
@@ -99,6 +140,12 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `HeadStartSeconds`, `EscapeTimeSeconds`, `RepairSeconds` | Timers |
 | `MonsterPatrolSpeed`, `MonsterChaseSpeed`, `MonsterMaxChaseSpeed`, `SpeedRampSeconds` | Monster speed |
 | `Hunter` | Sight and hearing ranges, noise radii, search and investigate behaviour |
+| `DefaultDifficulty`, `Difficulty` | Easy, Hard and Extreme settings: monster count, fuses, catches, escape time, speed, senses and taser odds |
+| `Stun` | Torch and punch stun range, duration and cooldown |
+| `DragCutscene` | Caught cutscenes on or off, length, captions and positioning |
+| `Assist` | Behind-you warning range and stuck-hint timings |
+| `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
+| `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |
 | `HidingSpots` | Hiding spot list |
 | `NightVision` | Night vision on or off, and battery drain |
 | `Jumpscare` | Volume, strobe, rumble and double-scare chance |
@@ -127,22 +174,77 @@ If a model fails to load, the script skips it for the rest of the session and
 tries another. If none load, it uses `Config.FallbackMonsterModels`, which are
 vanilla peds.
 
-## Server event
+## Server side
 
-When a player is caught for the last time, the client fires:
+`server/horror_server.lua` tracks each run, checks the client's end-of-run
+summary for impossible numbers, keeps lifetime stats and awards rewards.
+
+### Chat titles
+
+| Title | Requirement |
+| --- | --- |
+| Night Shift | Enter the Morgue Horror Event |
+| Morgue Rat | Escape the morgue x10 |
+| Coroner | Escape the morgue x100 |
+| Double Shift | Escape on Hard or Extreme x25 |
+| Toe Tag | Get caught x100 |
+| Fuse Box | Collect x500 real fuses |
+| Shock Therapy | Stun the monster x250 |
+| Lights Out | Lure a monster away with a thrown bottle x50 |
+| Teddy's Keeper | Find the worn teddy bear x10 |
+| Lost Property | Find every easter egg item |
+| Off the Record | Find a Staff Note in the morgue |
+| Body Bag Dodger | Escape without being caught once |
+| Unplugged | Escape a run where you spawned with no taser |
+| Three's a Crowd | Escape on Hard or Extreme with three monsters hunting you |
+| Last Breath | Escape with 4/5 catches used |
+| Locker Ghost | Escape on Hard or Extreme without being caught or firing a taser |
+| Patient Zero | Escape on Hard or Extreme with no taser, without being caught |
+| Graveyard Shift | Escape on Extreme |
+| The Unkillable | Escape on Extreme without being caught |
+
+The list is the `Titles` table at the top of the server file.
+
+### Leaderboard and private runs
+
+The server keeps the ten fastest escapes per difficulty (one entry per player) and
+each player's personal best. Times are measured by the server, and debug runs never
+count.
+
+During a run each player is moved into their own routing bucket (`BucketBase` plus
+their server ID, 7000 by default) and returned to their previous bucket afterwards.
+Set `UseRoutingBuckets = false` at the top of the server file to turn this off.
+
+### Hooking it into your server
+
+Four functions are marked `TODO(Transport Tycoon)`:
+
+| Function | Replace with |
+| --- | --- |
+| `PlayerKey` | Your player ID (for example the vRP user ID) |
+| `LoadStats`, `SaveStats` | Your own storage. By default, stats are saved in resource KVP |
+| `GiveTitle` | Your chat title unlock |
+| `GiveStaffNote` | Giving one Staff Note |
+
+Until they're replaced, titles and Staff Notes are only printed in the server
+console. Other resources can use:
 
 ```lua
-TriggerServerEvent('horror:playerCaught')
+exports['ls-horror']:GetHorrorStats(source)
+exports['ls-horror']:GetHorrorTitles()
+exports['ls-horror']:GetHorrorLeaderboard('easy')
+AddEventHandler('horror:titleEarned', function(source, id, name) end)
 ```
 
-Nothing listens for it by default. Hook it up for rewards, logging or
-leaderboards.
+When a player is caught for the last time, the client also fires
+`horror:playerCaught`.
 
 ## File structure
 
 ```
 ls-horror/
 ├── client/horror_client.lua   game logic and config
+├── server/horror_server.lua   run checks, stats, titles and rewards
 ├── html/                      NUI page and sounds
 ├── stream/                    monster models
 ├── peds.meta                  model registration

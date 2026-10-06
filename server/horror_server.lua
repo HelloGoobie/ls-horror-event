@@ -125,6 +125,7 @@ local function Defaults(s)
     s.staffNotes  = s.staffNotes or 0
     s.items       = s.items or {}
     s.titles      = s.titles or {}
+    s.best        = s.best or {}
     return s
 end
 
@@ -151,6 +152,52 @@ local function CheckTitles(src, stats, run)
             TriggerClientEvent('horror:notify', src, ('~y~CHAT TITLE UNLOCKED:~s~ %s~n~~c~%s'):format(t.name, t.desc), 7000)
         end)
     end
+    return earned
+end
+
+-- ============================================================
+-- LEADERBOARD
+-- ============================================================
+local BoardSize = 10
+local Difficulties = { easy = true, hard = true, extreme = true }
+
+local function LoadBoard(diff)
+    local raw = GetResourceKvpString('board:' .. diff)
+    local ok, data = pcall(json.decode, raw or '')
+    return (ok and type(data) == 'table') and data or {}
+end
+
+local function SaveBoard(diff, board)
+    SetResourceKvp('board:' .. diff, json.encode(board))
+end
+
+local function SubmitTime(src, diff, seconds)
+    local key = PlayerKey(src)
+    local board = LoadBoard(diff)
+    local existing
+    for _, e in ipairs(board) do
+        if e.key == key then existing = e break end
+    end
+    if existing then
+        if seconds < existing.seconds then
+            existing.seconds = seconds
+            existing.name = GetPlayerName(src) or existing.name
+            existing.date = os.date('%Y-%m-%d')
+        end
+    else
+        table.insert(board, { key = key, name = GetPlayerName(src) or 'Unknown', seconds = seconds, date = os.date('%Y-%m-%d') })
+    end
+    table.sort(board, function(a, b) return a.seconds < b.seconds end)
+    while #board > BoardSize do table.remove(board) end
+    SaveBoard(diff, board)
+    for i, e in ipairs(board) do
+        if e.key == key then return i end
+    end
+    return nil
+end
+
+local function FormatTime(seconds)
+    return ('%d:%02d'):format(math.floor(seconds / 60), seconds % 60)
 end
 
 local function Num(v, max)
@@ -202,7 +249,18 @@ RegisterNetEvent('horror:runEnded', function(summary)
     local r = CleanSummary(src, summary, run)
     if not r or r.debug then return end
 
+    local seconds = math.max(0, os.time() - run.started)
     local stats = GetStats(src)
+    local result = { seconds = seconds, escaped = r.escaped, difficulty = r.difficulty, titles = {} }
+    if r.escaped then
+        local prev = stats.best[r.difficulty]
+        result.previousBest = prev
+        if not prev or seconds < prev then
+            stats.best[r.difficulty] = seconds
+            result.personalBest = true
+        end
+        result.rank = SubmitTime(src, r.difficulty, seconds)
+    end
     if r.escaped then
         stats.escapes = stats.escapes + 1
         if r.difficulty ~= 'easy' then stats.hardEscapes = stats.hardEscapes + 1 end
@@ -216,8 +274,11 @@ RegisterNetEvent('horror:runEnded', function(summary)
         stats.items[r.item] = (stats.items[r.item] or 0) + 1
     end
 
-    CheckTitles(src, stats, r)
+    for _, t in ipairs(CheckTitles(src, stats, r)) do
+        table.insert(result.titles, t.name)
+    end
     SaveStats(src, stats)
+    TriggerClientEvent('horror:runResult', src, result)
 end)
 
 RegisterNetEvent('horror:staffNoteFound', function()
@@ -259,7 +320,25 @@ AddEventHandler('onResourceStop', function(name)
     end
 end)
 
+RegisterCommand('horrortop', function(src, args)
+    local diff = (args[1] or 'easy'):lower()
+    if not Difficulties[diff] then diff = 'easy' end
+    local board = LoadBoard(diff)
+    local lines = {}
+    for i = 1, math.min(5, #board) do
+        local e = board[i]
+        table.insert(lines, ('%d. %s  ~y~%s~s~'):format(i, e.name, FormatTime(e.seconds)))
+    end
+    local text = ('~r~FASTEST ESCAPES~s~ (%s)~n~%s'):format(diff:upper(), #lines > 0 and table.concat(lines, '~n~') or 'Nobody has escaped yet.')
+    if src == 0 then
+        print((text:gsub('~n~', '\n'):gsub('~.-~', '')))
+    else
+        TriggerClientEvent('horror:notify', src, text, 12000)
+    end
+end, false)
+
 exports('GetHorrorStats', function(src) return GetStats(src) end)
+exports('GetHorrorLeaderboard', function(diff) return LoadBoard(Difficulties[diff] and diff or 'easy') end)
 exports('GetHorrorTitles', function()
     local list = {}
     for _, t in ipairs(Titles) do
