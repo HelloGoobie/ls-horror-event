@@ -182,8 +182,8 @@ local Config = {
 
     Atmosphere = {
         CeilingLights     = true,
-        LightRange        = 5.0,
-        LightIntensity    = 0.22,
+        LightRange        = 3.5,
+        LightIntensity    = 0.08,
         LightColour       = { 165, 200, 190 },
         MaxLights         = 6,
         LightDistance     = 22.0,
