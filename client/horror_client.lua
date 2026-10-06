@@ -2416,19 +2416,42 @@ local function PlayDragCutscene(token, monster, playerPed)
     while not HasAnimDictLoaded(dict) and GetGameTimer() - t0 < 1500 do Wait(10) end
     local haveAnim = HasAnimDictLoaded(dict)
 
+    local found, groundZ = GetGroundZFor_3dCoord(start.x, start.y, start.z + 0.5, false)
+    if not found or math.abs(groundZ - start.z) > 2.5 then groundZ = start.z - 1.0 end
+    local pedZ = groundZ + 1.0
+
     local backwards = not isDog and haveAnim
+    local victimGap = backwards and 0.55 or (isDog and 0.85 or 0.95)
+    SetEntityCollision(playerPed, false, false)
     if backwards then
+        SetEntityCollision(monster, false, false)
+        SetEntityCoordsNoOffset(monster, start.x, start.y, pedZ, false, false, false)
         SetEntityHeading(monster, (travelHeading + 180.0) % 360.0)
         TaskPlayAnim(monster, dict, 'injured_drag_plyr', 4.0, 4.0, -1, 1, 0.0, false, false, false)
-        AttachEntityToEntity(playerPed, monster, GetPedBoneIndex(monster, 11816), 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, false, false, false, false, 2, false)
     else
         SetEntityHeading(monster, travelHeading)
         TaskGoStraightToCoord(monster, finish.x, finish.y, finish.z, 1.0, -1, travelHeading, 0.0)
-        AttachEntityToEntity(playerPed, monster, 0, 0.0, isDog and -0.45 or -0.7, isDog and -0.55 or -0.5, 0.0, 0.0, 180.0, false, false, false, false, 2, true)
     end
     if haveAnim then
         TaskPlayAnim(playerPed, dict, 'injured_drag_ped', 4.0, 4.0, -1, 1, 0.0, false, false, false)
     end
+
+    local function placeVictim()
+        local mp = GetEntityCoords(monster)
+        local mh = GetEntityHeading(monster)
+        local fwd = vector3(-math.sin(math.rad(mh)), math.cos(math.rad(mh)), 0.0)
+        local vp, vh
+        if backwards then
+            vp = vector3(mp.x, mp.y, 0.0) + fwd * victimGap
+            vh = mh
+        else
+            vp = vector3(mp.x, mp.y, 0.0) - fwd * victimGap
+            vh = (mh + 180.0) % 360.0
+        end
+        SetEntityCoordsNoOffset(playerPed, vp.x, vp.y, pedZ, false, false, false)
+        SetEntityHeading(playerPed, vh)
+    end
+    placeVictim()
 
     local side = vector3(-dir.y, dir.x, 0.0)
     local mid = start + dir * (dist * 0.5) + vector3(0.0, 0.0, 0.2)
@@ -2479,9 +2502,10 @@ local function PlayDragCutscene(token, monster, playerPed)
 
         if backwards then
             local p = start + dir * (dist * t)
-            SetEntityCoordsNoOffset(monster, p.x, p.y, start.z, false, false, false)
+            SetEntityCoordsNoOffset(monster, p.x, p.y, pedZ, false, false, false)
             SetEntityHeading(monster, (travelHeading + 180.0) % 360.0)
         end
+        placeVictim()
 
         local mPos = GetEntityCoords(monster)
         local victim = GetEntityCoords(playerPed)
@@ -2497,11 +2521,11 @@ local function PlayDragCutscene(token, monster, playerPed)
         local camPos, lookAt
         if not switched then
             local pairMid = (victim + mPos) * 0.5
-            camPos = vector3(pairMid.x, pairMid.y, start.z - 0.35) + side * (sideDist + 0.4)
+            camPos = vector3(pairMid.x, pairMid.y, pedZ - 0.35) + side * (sideDist + 0.4)
             lookAt = pairMid + vector3(0.0, 0.0, 0.1)
         else
             local back = facingEnd + faceDir * 1.4
-            camPos = vector3(back.x, back.y, start.z - 0.55)
+            camPos = vector3(back.x, back.y, pedZ - 0.55)
             lookAt = face
         end
         SetCamCoord(cam, camPos.x, camPos.y, camPos.z)
@@ -2527,6 +2551,8 @@ local function PlayDragCutscene(token, monster, playerPed)
     Cine("captionHide")
     Cine("cineEnd")
     DetachEntity(playerPed, true, false)
+    SetEntityCollision(playerPed, true, true)
+    SetEntityCollision(monster, true, true)
     StopAnimTask(playerPed, dict, 'injured_drag_ped', 1.0)
     ClearPedTasksImmediately(playerPed)
     ClearPedTasksImmediately(monster)
