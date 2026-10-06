@@ -48,7 +48,7 @@ while an Outlast-style monster hunts them through the building.
   `/horrortop` shows the fastest escapes per difficulty.
 - **Accessibility.** The warning screen has a reduce-flashing toggle and a scare
   volume slider. Your choices and last difficulty are remembered.
-- **Atmosphere.** A cold, washed-out colour grade, dim fluorescent lights that stutter
+- **Atmosphere.** Dim fluorescent lights that stutter
   and die, occasional power surges, red emergency lights by the exits and faint red
   eyes on a monster that's hunting you.
 - **Quality of life.** A dark vignette and faint growls warn you when something is
@@ -146,7 +146,7 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `DragCutscene` | Caught cutscenes on or off, length, captions and positioning |
 | `Assist` | Behind-you warning range and stuck-hint timings |
 | `FirstPerson` | How much wider the first-person view is during the run (restored afterwards) |
-| `Atmosphere` | Colour grade, flickering ceiling lights, power surges, emergency lights, monster eyes and the scream cooldown |
+| `Atmosphere` | Flickering ceiling lights, power surges, emergency lights, monster eyes and the scream cooldown |
 | `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
 | `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |
 | `HidingSpots` | Hiding spot list |

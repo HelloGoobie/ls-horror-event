@@ -181,7 +181,6 @@ local Config = {
     },
 
     Atmosphere = {
-        Desaturate        = 0.2,
         CeilingLights     = true,
         LightRange        = 5.0,
         LightIntensity    = 0.22,
@@ -1214,10 +1213,6 @@ function StartHorrorEvent(chosenDifficulty)
     DisableScreenblurFade()
     SetTimecycleModifier("MP_Smuggler_Int")
     SetTimecycleModifierStrength(1.0)
-    if (Config.Atmosphere.Desaturate or 0) > 0 then
-        SetExtraTimecycleModifier("rply_saturation_neg")
-        SetExtraTimecycleModifierStrength(Config.Atmosphere.Desaturate)
-    end
 
     GiveWeaponToPed(playerPed, WEAPON_FLASHLIGHT, 1, false, true)
     if taserMode ~= 'none' then
@@ -1759,11 +1754,46 @@ local function LoadFirstWorkingModel(candidates)
     return nil, nil
 end
 
+local function NextModelOrder()
+    local valid = {}
+    for _, name in ipairs(Config.MonsterModels) do
+        if not brokenModels[name] then valid[name] = true end
+    end
+
+    local ok, saved = pcall(json.decode, GetResourceKvpString('horror_modelBag') or '')
+    local bag = {}
+    if ok and type(saved) == 'table' then
+        for _, name in ipairs(saved) do
+            if valid[name] then table.insert(bag, name) end
+        end
+    end
+    if #bag == 0 then
+        bag = ShuffledCopy(Config.MonsterModels)
+        local last = GetResourceKvpString('horror_lastModel')
+        if #bag > 1 and bag[1] == last then
+            bag[1], bag[2] = bag[2], bag[1]
+        end
+    end
+
+    local pick = table.remove(bag, 1)
+    SetResourceKvp('horror_modelBag', json.encode(bag))
+    SetResourceKvp('horror_lastModel', pick)
+
+    local order = { pick }
+    for _, name in ipairs(ShuffledCopy(Config.MonsterModels)) do
+        if name ~= pick then table.insert(order, name) end
+    end
+    return order
+end
+
 function CreateMonster(token, preferredModel, callback)
     CreateThread(function()
-        local candidates = ShuffledCopy(Config.MonsterModels)
+        local candidates
         if preferredModel then
+            candidates = ShuffledCopy(Config.MonsterModels)
             table.insert(candidates, 1, preferredModel)
+        else
+            candidates = NextModelOrder()
         end
 
         local modelHash, modelName = LoadFirstWorkingModel(candidates)
@@ -2827,9 +2857,25 @@ function PlayDragCutscene(token, monster, playerPed)
     local victimZ = pedZ + (tune.Height or -0.78)
     local victimTurn = tune.Turn or 180.0
     SetCurrentPedWeapon(playerPed, GetHashKey("WEAPON_UNARMED"), true)
-    SetPedCanRagdoll(playerPed, false)
     SetEntityCollision(playerPed, false, false)
     FreezeEntityPosition(playerPed, true)
+    SetEntityInvincible(playerPed, true)
+
+    local victimPed = ClonePed(playerPed, false, false, true)
+    local usingClone = victimPed ~= 0 and DoesEntityExist(victimPed)
+    if usingClone then
+        SetEntityAsMissionEntity(victimPed, true, true)
+        SetBlockingOfNonTemporaryEvents(victimPed, true)
+        SetEntityInvincible(victimPed, true)
+        RemoveAllPedWeapons(victimPed, true)
+        SetEntityVisible(playerPed, false, false)
+    else
+        print('[HORROR WARNING] Could not clone the player for the drag scene - animating the player instead.')
+        victimPed = playerPed
+    end
+    SetPedCanRagdoll(victimPed, false)
+    SetEntityCollision(victimPed, false, false)
+    FreezeEntityPosition(victimPed, true)
     Wait(0)
     if backwards then
         SetEntityCollision(monster, false, false)
@@ -2841,8 +2887,8 @@ function PlayDragCutscene(token, monster, playerPed)
         TaskGoStraightToCoord(monster, finish.x, finish.y, finish.z, 1.0, -1, travelHeading, 0.0)
     end
     local function keepVictimAnim()
-        if haveAnim and not IsEntityPlayingAnim(playerPed, dict, 'injured_drag_ped', 3) then
-            TaskPlayAnim(playerPed, dict, 'injured_drag_ped', 8.0, 8.0, -1, 1, 0.0, false, false, false)
+        if haveAnim and not IsEntityPlayingAnim(victimPed, dict, 'injured_drag_ped', 3) then
+            TaskPlayAnim(victimPed, dict, 'injured_drag_ped', 8.0, 8.0, -1, 1, 0.0, false, false, false)
         end
         if backwards and not IsEntityPlayingAnim(monster, dict, 'injured_drag_plyr', 3) then
             TaskPlayAnim(monster, dict, 'injured_drag_plyr', 8.0, 8.0, -1, 1, 0.0, false, false, false)
@@ -2862,8 +2908,8 @@ function PlayDragCutscene(token, monster, playerPed)
             vp = vector3(mp.x, mp.y, 0.0) - fwd * victimGap
             vh = (mh + 180.0 + victimTurn) % 360.0
         end
-        SetEntityCoordsNoOffset(playerPed, vp.x, vp.y, victimZ, false, false, false)
-        SetEntityHeading(playerPed, vh)
+        SetEntityCoordsNoOffset(victimPed, vp.x, vp.y, victimZ, false, false, false)
+        SetEntityHeading(victimPed, vh)
     end
     placeVictim()
 
@@ -2923,7 +2969,7 @@ function PlayDragCutscene(token, monster, playerPed)
         keepVictimAnim()
 
         local mPos = GetEntityCoords(monster)
-        local victim = GetEntityCoords(playerPed)
+        local victim = GetEntityCoords(victimPed)
         local face = GetMonsterFace(monster)
         pinRoom()
 
@@ -2965,8 +3011,13 @@ function PlayDragCutscene(token, monster, playerPed)
     Wait(470)
     Cine("captionHide")
     Cine("cineEnd")
+    if usingClone and DoesEntityExist(victimPed) then
+        DeleteEntity(victimPed)
+    end
+    SetEntityVisible(playerPed, true, false)
     DetachEntity(playerPed, true, false)
     FreezeEntityPosition(playerPed, false)
+    SetEntityInvincible(playerPed, false)
     SetPedCanRagdoll(playerPed, true)
     SetEntityCollision(playerPed, true, true)
     SetEntityCollision(monster, true, true)
