@@ -221,7 +221,7 @@ local Config = {
         Enabled    = true,
         DurationMs = 5200,
         Distance   = 6.0,
-        Human = { Gap = 0.55, Height = 0.0, Turn = 180.0 },
+        Human = { Gap = 0.55, Height = 0.0, Turn = 180.0, PelvisLift = 0.16, AutoAlign = true },
         Dog   = { Gap = 0.95, Turn = 180.0 },
         DogLines = {
             "It pins you to the floor...",
@@ -2910,6 +2910,35 @@ function PlayDragCutscene(token, monster, playerPed)
     end
     keepVictimAnim()
 
+    local adjX, adjY, adjZ = 0.0, 0.0, 0.0
+    local autoAlign = tune.AutoAlign ~= false and haveAnim
+    local pelvisLift = tune.PelvisLift or 0.16
+    local function alignStep()
+        if not autoAlign then return end
+        local ent = GetEntityCoords(victimPed)
+        local pelvis = GetPedBoneCoords(victimPed, 11816, 0.0, 0.0, 0.0)
+        if #(pelvis - ent) > 0.01 and #(pelvis - ent) < 2.0 then
+            local floorZ = groundZ
+            local okG, gz = GetGroundZFor_3dCoord(pelvis.x, pelvis.y, groundZ + 1.0, false)
+            if okG and math.abs(gz - groundZ) < 0.6 then floorZ = gz end
+            adjZ = adjZ + ((floorZ + pelvisLift) - pelvis.z) * 0.5
+        end
+        if backwards then
+            local mpos = GetEntityCoords(monster)
+            local lh = GetPedBoneCoords(monster, 18905, 0.0, 0.0, 0.0)
+            local rh = GetPedBoneCoords(monster, 57005, 0.0, 0.0, 0.0)
+            local chest = GetPedBoneCoords(victimPed, 24818, 0.0, 0.0, 0.0)
+            if #(lh - mpos) > 0.05 and #(rh - mpos) > 0.05 and #(chest - ent) > 0.05 then
+                local hands = (lh + rh) * 0.5
+                adjX = adjX + (hands.x - chest.x) * 0.3
+                adjY = adjY + (hands.y - chest.y) * 0.3
+            end
+        end
+        local h = math.sqrt(adjX * adjX + adjY * adjY)
+        if h > 1.2 then adjX, adjY = adjX / h * 1.2, adjY / h * 1.2 end
+        adjZ = math.max(-1.5, math.min(1.5, adjZ))
+    end
+
     local function placeVictim()
         local mp = GetEntityCoords(monster)
         local mh = GetEntityHeading(monster)
@@ -2922,10 +2951,16 @@ function PlayDragCutscene(token, monster, playerPed)
             vp = vector3(mp.x, mp.y, 0.0) - fwd * victimGap
             vh = (mh + 180.0 + victimTurn) % 360.0
         end
-        SetEntityCoordsNoOffset(victimPed, vp.x, vp.y, victimZ, false, false, false)
+        SetEntityCoordsNoOffset(victimPed, vp.x + adjX, vp.y + adjY, victimZ + adjZ, false, false, false)
         SetEntityHeading(victimPed, vh)
     end
     placeVictim()
+    for _ = 1, 20 do
+        Wait(0)
+        keepVictimAnim()
+        alignStep()
+        placeVictim()
+    end
 
     local side = vector3(-dir.y, dir.x, 0.0)
     local mid = start + dir * (dist * 0.5) + vector3(0.0, 0.0, 0.2)
@@ -2979,6 +3014,7 @@ function PlayDragCutscene(token, monster, playerPed)
             SetEntityCoordsNoOffset(monster, p.x, p.y, pedZ, false, false, false)
             SetEntityHeading(monster, (travelHeading + 180.0) % 360.0)
         end
+        alignStep()
         placeVictim()
         keepVictimAnim()
 
