@@ -467,6 +467,10 @@ local function SafeTeleport(ped, coords, heading)
         while not IsInteriorReady(interior) and t < 40 do Wait(25) t = t + 1 end
     end
 
+    if IsEntityAttached(ped) then DetachEntity(ped, true, false) end
+    ClearRoomForEntity(ped)
+    if isPlayer then ClearRoomForGameViewport() end
+
     FreezeEntityPosition(ped, true)
     RequestCollisionAtCoord(x, y, z)
     SetEntityCoordsNoOffset(ped, x, y, z + 1.0, false, false, false)
@@ -488,19 +492,24 @@ local function SafeTeleport(ped, coords, heading)
     FreezeEntityPosition(ped, false)
 
     local synced = false
-    for _ = 1, 40 do
-        Wait(0)
-        local int = GetInteriorFromEntity(ped)
-        if int == 0 then int = interior end
-        local room = GetRoomKeyFromEntity(ped)
-        if int ~= 0 and room ~= 0 then
-            ForceRoomForEntity(ped, int, room)
-            if isPlayer then
-                ForceRoomForGameViewport(int, room)
+    for attempt = 1, 2 do
+        for _ = 1, 45 do
+            Wait(0)
+            local int = GetInteriorFromEntity(ped)
+            local room = GetRoomKeyFromEntity(ped)
+            if int ~= 0 and room ~= 0 and (interior == 0 or int == interior) then
+                ForceRoomForEntity(ped, int, room)
+                if isPlayer then
+                    ForceRoomForGameViewport(int, room)
+                end
+                synced = true
+                break
             end
-            synced = true
-            break
         end
+        if synced or interior == 0 then break end
+        RefreshInterior(interior)
+        ClearRoomForEntity(ped)
+        SetEntityCoordsNoOffset(ped, x, y, z + 1.0, false, false, false)
     end
 
     if isPlayer then
@@ -512,6 +521,29 @@ local function SafeTeleport(ped, coords, heading)
             RefreshInterior(interior)
         end
     end
+end
+
+local function ResyncPlayerRoom()
+    local ped = PlayerPedId()
+    local c = GetEntityCoords(ped)
+    local expected = GetInteriorAtCoords(c.x, c.y, c.z)
+    if expected == 0 or GetInteriorFromEntity(ped) == expected and GetRoomKeyFromEntity(ped) ~= 0 then
+        return false
+    end
+    ClearRoomForEntity(ped)
+    ClearRoomForGameViewport()
+    for _ = 1, 30 do
+        Wait(0)
+        local int = GetInteriorFromEntity(ped)
+        local room = GetRoomKeyFromEntity(ped)
+        if int == expected and room ~= 0 then
+            ForceRoomForEntity(ped, int, room)
+            ForceRoomForGameViewport(int, room)
+            return true
+        end
+    end
+    RefreshInterior(expected)
+    return true
 end
 
 local function GetCamForward()
@@ -1324,9 +1356,17 @@ function StartSurvivalMechanicsLoop(token)
     CreateThread(function()
         local farSince = nil
         local nvTick = 0
+        local nextRoomCheck = 0
 
         while IsSessionActive(token) do
             local playerPed = PlayerPedId()
+
+            if not cutsceneActive and GetGameTimer() >= nextRoomCheck then
+                nextRoomCheck = GetGameTimer() + 1000
+                if not IsEntityAttached(playerPed) and ResyncPlayerRoom() then
+                    print('[HORROR] player room was out of sync - resynced')
+                end
+            end
 
             if IsEntityDead(playerPed) then
                 ShowNotification("You died... the morgue claims another.", 6000)
@@ -2407,9 +2447,10 @@ local function PlayDragCutscene(token, monster, playerPed)
     RenderScriptCams(true, false, 0, true, false)
 
     local function pinRoom()
-        local interior = GetInteriorFromEntity(monster)
+        local mp = GetEntityCoords(monster)
+        local interior = GetInteriorAtCoords(mp.x, mp.y, mp.z)
         local room = GetRoomKeyFromEntity(monster)
-        if interior ~= 0 and room ~= 0 then
+        if interior ~= 0 and room ~= 0 and GetInteriorFromEntity(monster) == interior then
             ForceRoomForGameViewport(interior, room)
         end
     end
@@ -2491,6 +2532,8 @@ local function PlayDragCutscene(token, monster, playerPed)
     ClearPedTasksImmediately(monster)
     RenderScriptCams(false, false, 0, true, false)
     DestroyCam(cam, false)
+    ClearRoomForEntity(playerPed)
+    ClearRoomForEntity(monster)
     ClearRoomForGameViewport()
     ClearFocus()
     RemoveAnimDict(dict)
