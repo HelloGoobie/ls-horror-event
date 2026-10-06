@@ -648,7 +648,7 @@ CreateThread(function()
         if isEventActive or showNote then
             sleep = 0
 
-            if showNote then
+            if showNote and not cutsceneActive then
                 DrawScaledText(0.5, 0.15, 0.55, activeNotification.text, 255, 255, 255, 255)
             end
 
@@ -3048,6 +3048,14 @@ function PlayDragCutscene(token, monster, playerPed)
             local back = facingEnd + faceDir * 1.4
             camPos = vector3(back.x, back.y, pedZ - 0.55)
             lookAt = face
+        end
+        local armLen = #(camPos - lookAt)
+        if armLen > 0.3 then
+            local clear = ClearDistanceTo(lookAt, camPos, monster)
+            if clear < armLen - 0.05 then
+                local pull = math.max(0.35, clear - 0.25)
+                camPos = lookAt + (camPos - lookAt) / armLen * pull
+            end
         end
         SetCamCoord(cam, camPos.x, camPos.y, camPos.z)
         PointCamAtCoord(cam, lookAt.x, lookAt.y, lookAt.z)
