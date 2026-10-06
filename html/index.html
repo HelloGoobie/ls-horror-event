@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LS Horror UI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --red: #e5383b;
+            --red-deep: #9d0208;
+            --ink: #f4f1ee;
+            --muted: rgba(244, 241, 238, 0.58);
+            --faint: rgba(244, 241, 238, 0.10);
+            --card: rgba(13, 12, 14, 0.86);
+            --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+            --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            overflow: hidden; background: transparent;
+            font-family: var(--sans); color: var(--ink);
+            -webkit-font-smoothing: antialiased; user-select: none;
+        }
+
+        /* ---------------- Hiding overlays ---------------- */
+        #hide { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .25s ease; }
+        #hide.show { opacity: 1; }
+        #hide.locker {
+
+            background:
+                linear-gradient(90deg, #000 0 14%, transparent 24% 76%, #000 86% 100%),
+                linear-gradient(180deg, #000 0 33%, transparent 33% 67%, #000 67% 100%),
+                repeating-linear-gradient(180deg, rgba(0,0,0,.96) 0 22px, transparent 22px 36px),
+                radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.7) 90%);
+        }
+        #hide.low {
+
+            background:
+                linear-gradient(180deg, #000 0 34%, rgba(0,0,0,.85) 40%, transparent 52%),
+                radial-gradient(ellipse 80% 70% at 50% 75%, transparent 40%, rgba(0,0,0,.95) 100%);
+        }
+
+        /* ---------------- Camcorder (night vision) ---------------- */
+        #cam { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .15s ease; font-family: var(--sans); }
+        #cam.show { opacity: 1; }
+        #cam .corner { position: absolute; width: 60px; height: 60px; border: 2px solid rgba(255,255,255,.75); }
+        #cam .tl { top: 6vh; left: 5vw; border-right: 0; border-bottom: 0; }
+        #cam .tr { top: 6vh; right: 5vw; border-left: 0; border-bottom: 0; }
+        #cam .bl { bottom: 6vh; left: 5vw; border-right: 0; border-top: 0; }
+        #cam .br { bottom: 6vh; right: 5vw; border-left: 0; border-top: 0; }
+        #cam .rec { position: absolute; top: calc(6vh + 18px); left: calc(5vw + 22px); display: flex; align-items: center; gap: 10px;
+                    font-size: 20px; font-weight: 600; letter-spacing: .12em; color: rgba(255,255,255,.9); text-shadow: 0 0 6px rgba(0,0,0,.6); }
+        #cam .rec i { width: 13px; height: 13px; border-radius: 50%; background: #ff2b2b; animation: blink 1s steps(1) infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        #cam .tc { position: absolute; bottom: calc(6vh + 18px); left: calc(5vw + 22px); font-size: 18px; letter-spacing: .1em; color: rgba(255,255,255,.85); font-variant-numeric: tabular-nums; }
+        #cam .nv { position: absolute; top: calc(6vh + 20px); right: calc(5vw + 22px); font-size: 14px; letter-spacing: .2em; color: rgba(255,255,255,.8); }
+        #cam .batt { position: absolute; bottom: calc(6vh + 18px); right: calc(5vw + 22px); width: 46px; height: 20px; border: 2px solid rgba(255,255,255,.8); border-radius: 3px; padding: 2px; display: flex; gap: 2px; }
+        #cam .batt::after { content: ""; position: absolute; right: -6px; top: 5px; width: 4px; height: 7px; background: rgba(255,255,255,.8); border-radius: 0 2px 2px 0; }
+        #cam .batt b { flex: 1; background: rgba(255,255,255,.85); }
+        #cam .batt b.off { background: transparent; }
+        #cam .batt.low b { background: #ff3b3b; }
+        #cam::after {
+            content: ""; position: absolute; inset: 0;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 1px, transparent 1px 3px),
+                        radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%);
+        }
+
+        /* ---------------- Hurt ---------------- */
+        #hurt { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0;
+                background: radial-gradient(ellipse at center, transparent 35%, rgba(150,0,0,.55) 80%, rgba(90,0,0,.85) 100%); }
+        #hurt.hit { animation: hurt 3.2s ease-out forwards; }
+        @keyframes hurt { 0% { opacity: 1; } 15% { opacity: .75; } 30% { opacity: .95; } 100% { opacity: 0; } }
+
+        /* ---------------- Content warning ---------------- */
+        #warning {
+            position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+            background:
+                radial-gradient(ellipse 70% 60% at 50% 45%, rgba(60, 0, 4, 0.35), transparent 70%),
+                radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.94) 75%);
+            opacity: 0; visibility: hidden; transition: opacity .35s ease, visibility 0s linear .35s;
+        }
+        #warning.show { opacity: 1; visibility: visible; transition: opacity .35s ease; }
+        #warning::after {
+            content: ""; position: absolute; inset: -50%; pointer-events: none; opacity: .07;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+            animation: grain 1s steps(6) infinite;
+        }
+        @keyframes grain {
+            0% { transform: translate(0, 0); } 20% { transform: translate(-3%, 2%); } 40% { transform: translate(2%, -3%); }
+            60% { transform: translate(-2%, -1%); } 80% { transform: translate(3%, 3%); } 100% { transform: translate(0, 0); }
+        }
+
+        .card {
+            position: relative; z-index: 1; width: min(580px, 92vw);
+            padding: 34px 36px 30px; border-radius: 20px;
+            background: var(--card);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            box-shadow: 0 40px 120px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(229, 56, 59, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(18px);
+            transform: translateY(16px) scale(.98); opacity: 0;
+            transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .45s ease;
+        }
+        #warning.show .card { transform: none; opacity: 1; transition-delay: .08s; }
+        .card::before {
+            content: ""; position: absolute; left: 36px; right: 36px; top: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--red), transparent); opacity: .8;
+        }
+
+        .pill {
+            display: inline-flex; align-items: center; gap: 9px;
+            padding: 6px 12px 6px 10px; border-radius: 999px;
+            background: rgba(229, 56, 59, 0.10); border: 1px solid rgba(229, 56, 59, 0.28);
+            font-size: 11px; font-weight: 600; letter-spacing: .16em; color: #ff8a8c;
+        }
+        .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 0 rgba(229, 56, 59, .6); animation: pulse 1.6s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(229, 56, 59, .55); } 70% { box-shadow: 0 0 0 9px rgba(229, 56, 59, 0); } 100% { box-shadow: 0 0 0 0 rgba(229, 56, 59, 0); } }
+
+        h1 {
+            margin: 18px 0 4px; font-family: var(--serif); font-weight: 600;
+            font-size: 46px; line-height: 1; letter-spacing: .01em;
+        }
+        .lede { margin: 0 0 24px; color: var(--muted); font-size: 14px; font-weight: 300; }
+
+        .items { display: grid; gap: 10px; margin-bottom: 22px; }
+        .item {
+            display: grid; grid-template-columns: 40px 1fr; gap: 14px; align-items: center;
+            padding: 12px 14px; border-radius: 12px;
+            background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05);
+            opacity: 0; transform: translateY(6px);
+        }
+        #warning.show .item { animation: rise .5s cubic-bezier(.2, .8, .2, 1) forwards; }
+        #warning.show .item:nth-child(1) { animation-delay: .22s; }
+        #warning.show .item:nth-child(2) { animation-delay: .30s; }
+        #warning.show .item:nth-child(3) { animation-delay: .38s; }
+        @keyframes rise { to { opacity: 1; transform: none; } }
+
+        .icon {
+            width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+            background: linear-gradient(160deg, rgba(229, 56, 59, .22), rgba(157, 2, 8, .12));
+            border: 1px solid rgba(229, 56, 59, .25); color: #ff8a8c;
+        }
+        .icon svg { width: 20px; height: 20px; }
+        .item b { display: block; font-weight: 500; font-size: 14.5px; margin-bottom: 2px; }
+        .item span { color: var(--muted); font-size: 12.5px; font-weight: 300; }
+
+        .note {
+            margin: 0 0 26px; font-size: 12.5px; line-height: 1.55; color: var(--muted); font-weight: 300;
+        }
+        .note code {
+            font-family: var(--sans); font-size: 11.5px; padding: 2px 6px; border-radius: 6px;
+            background: var(--faint); color: var(--ink);
+        }
+
+        .actions { display: flex; gap: 12px; justify-content: flex-end; }
+        button {
+            display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+            font-family: var(--sans); font-size: 14px; font-weight: 500; letter-spacing: .01em;
+            border-radius: 12px; padding: 12px 16px 12px 18px; border: 1px solid transparent;
+            transition: transform .15s ease, background .2s ease, box-shadow .2s ease, border-color .2s ease;
+        }
+        button:active { transform: scale(.98); }
+        .ghost { background: transparent; color: var(--muted); border-color: rgba(255, 255, 255, .10); }
+        .ghost:hover { color: var(--ink); border-color: rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .03); }
+        .primary {
+            color: #fff; background: linear-gradient(180deg, #ef4446, #b81d24);
+            box-shadow: 0 10px 30px rgba(229, 56, 59, .28), inset 0 1px 0 rgba(255, 255, 255, .18);
+        }
+        .primary:hover { box-shadow: 0 14px 40px rgba(229, 56, 59, .45), inset 0 1px 0 rgba(255, 255, 255, .22); }
+        kbd {
+            font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+            padding: 3px 7px; border-radius: 6px; line-height: 1;
+            background: rgba(255, 255, 255, .10); border: 1px solid rgba(255, 255, 255, .14);
+            border-bottom-width: 2px; color: inherit; opacity: .9;
+        }
+        .primary kbd { background: rgba(0, 0, 0, .18); border-color: rgba(255, 255, 255, .25); }
+
+        /* ---------------- Cinematic overlay ---------------- */
+        .bar {
+            position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 5;
+            transition: height 1s cubic-bezier(.65, 0, .35, 1);
+        }
+        #barTop { top: 0; }
+        #barBottom { bottom: 0; }
+        body.cine #barTop, body.cine #barBottom { height: 11.5vh; }
+
+        #caption {
+            position: fixed; left: 0; right: 0; bottom: 0; height: 11.5vh; z-index: 6;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+            opacity: 0; transform: translateY(6px); filter: blur(4px);
+            transition: opacity .7s ease, transform .7s ease, filter .7s ease;
+            text-align: center; pointer-events: none;
+        }
+        #caption.show { opacity: 1; transform: none; filter: none; }
+        #caption .kicker { font-size: 11px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: var(--red); }
+        #caption .text { font-size: clamp(16px, 1.45vw, 26px); font-weight: 300; letter-spacing: .02em; color: rgba(255, 255, 255, .92); }
+
+        #title {
+            position: fixed; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 14px; pointer-events: none; opacity: 0; transition: opacity 1.4s ease;
+        }
+        #title.show { opacity: 1; }
+        #title .main {
+            font-family: var(--serif); font-weight: 500; font-size: clamp(48px, 6vw, 110px);
+            letter-spacing: .42em; padding-left: .42em; color: rgba(255, 255, 255, .94);
+            text-shadow: 0 0 40px rgba(0, 0, 0, .9), 0 0 2px rgba(0, 0, 0, .9);
+            transform: scale(1.04); transition: transform 6s ease-out, letter-spacing 6s ease-out;
+        }
+        #title.show .main { transform: scale(1); letter-spacing: .5em; }
+        #title .sub { font-size: 12px; font-weight: 500; letter-spacing: .35em; text-transform: uppercase; color: rgba(255, 255, 255, .6); }
+
+        #finalLine {
+            position: fixed; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center;
+            font-family: var(--serif); font-style: italic; font-size: clamp(26px, 2.6vw, 46px); letter-spacing: .02em;
+            color: rgba(255, 255, 255, .9); opacity: 0; transition: opacity 1.2s ease; pointer-events: none;
+        }
+        #finalLine.show { opacity: 1; }
+
+        #skip {
+            position: fixed; right: 3vw; bottom: 0; height: 11.5vh; z-index: 6;
+            display: flex; align-items: center; gap: 10px; font-size: 11px; letter-spacing: .2em;
+            text-transform: uppercase; color: rgba(255, 255, 255, .45);
+            opacity: 0; transition: opacity .6s ease .8s; pointer-events: none;
+        }
+        body.cine #skip.enabled { opacity: 1; }
+    </style>
+</head>
+<body>
+    <!-- Gameplay overlays -->
+    <div id="cam">
+        <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+        <div class="rec"><i></i>REC</div>
+        <div class="nv">NIGHT VISION</div>
+        <div class="tc" id="camTime">00:00:00</div>
+        <div class="batt" id="camBatt"><b></b><b></b><b></b><b></b></div>
+    </div>
+    <div id="hide"></div>
+    <div id="hurt"></div>
+
+    <!-- Content warning -->
+    <div id="warning" aria-hidden="true">
+        <div class="card" role="dialog" aria-labelledby="wTitle">
+            <div class="pill"><span class="dot"></span>CONTENT WARNING</div>
+            <h1 id="wTitle">The Morgue</h1>
+            <p class="lede">A horror experience. Please read before you go in.</p>
+
+            <div class="items">
+                <div class="item">
+                    <div class="icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>
+                    </div>
+                    <div><b>Flashing lights</b><span>Strobing light and rapid flashes.</span></div>
+                </div>
+                <div class="item">
+                    <div class="icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+                    </div>
+                    <div><b>Loud, sudden sounds</b><span>Screams and abrupt audio spikes.</span></div>
+                </div>
+                <div class="item">
+                    <div class="icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                    <div><b>Jump scares &amp; horror</b><span>Intense, frightening imagery.</span></div>
+                </div>
+            </div>
+
+            <p class="note">If you're sensitive to any of the above, please take care. You can leave at any time with <code>/stopHorror</code>.</p>
+
+            <div class="actions">
+                <button class="ghost" id="btnCancel">Not tonight <kbd>ESC</kbd></button>
+                <button class="primary" id="btnAccept">Enter the morgue <kbd>ENTER</kbd></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cinematic -->
+    <div class="bar" id="barTop"></div>
+    <div class="bar" id="barBottom"></div>
+    <div id="title"><div class="main"></div><div class="sub"></div></div>
+    <div id="caption"><div class="kicker"></div><div class="text"></div></div>
+    <div id="finalLine"></div>
+    <div id="skip"><kbd>SPACE</kbd> Skip</div>
+
+    <script>
+        const RESOURCE = (typeof GetParentResourceName === "function") ? GetParentResourceName() : "ls-horror";
+        const $ = (id) => document.getElementById(id);
+
+        function post(endpoint, data) {
+            return fetch(`https://${RESOURCE}/${endpoint}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json; charset=UTF-8" },
+                body: JSON.stringify(data || {})
+            }).catch(() => {});
+        }
+
+        /* ---------------- Warning ---------------- */
+        let warningOpen = false;
+
+        function showWarning() {
+            warningOpen = true;
+            const w = $("warning");
+            w.classList.remove("show"); void w.offsetWidth; w.classList.add("show");
+            w.setAttribute("aria-hidden", "false");
+            setTimeout(() => $("btnAccept").focus(), 50);
+        }
+        function hideWarning() {
+            warningOpen = false;
+            $("warning").classList.remove("show");
+            $("warning").setAttribute("aria-hidden", "true");
+        }
+        function answerWarning(accepted) {
+            if (!warningOpen) return;
+            hideWarning();
+            post("warningResult", { accepted });
+        }
+        $("btnAccept").addEventListener("click", () => answerWarning(true));
+        $("btnCancel").addEventListener("click", () => answerWarning(false));
+        window.addEventListener("keydown", (e) => {
+            if (!warningOpen) return;
+            if (e.key === "Enter") { e.preventDefault(); answerWarning(true); }
+            else if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); answerWarning(false); }
+        });
+
+        /* ---------------- Cinematic ---------------- */
+        let captionTimer = null, titleTimer = null;
+
+        function cineStart(skip) {
+            document.body.classList.add("cine");
+            $("skip").classList.toggle("enabled", !!skip);
+        }
+        function cineEnd() {
+            document.body.classList.remove("cine");
+            ["caption", "title", "finalLine"].forEach(id => $(id).classList.remove("show"));
+            clearTimeout(captionTimer); clearTimeout(titleTimer);
+        }
+        function showCaption(kicker, text, delay) {
+            clearTimeout(captionTimer);
+            const c = $("caption");
+            c.classList.remove("show");
+            captionTimer = setTimeout(() => {
+                c.querySelector(".kicker").textContent = kicker || "";
+                c.querySelector(".text").textContent = text || "";
+                c.classList.add("show");
+            }, (delay || 0) + 250);
+        }
+        function showTitle(text, sub) {
+            const t = $("title");
+            t.querySelector(".main").textContent = text || "";
+            t.querySelector(".sub").textContent = sub || "";
+            t.classList.remove("show"); void t.offsetWidth; t.classList.add("show");
+            clearTimeout(titleTimer);
+            titleTimer = setTimeout(() => t.classList.remove("show"), 3200);
+        }
+
+        /* ---------------- Gameplay overlays ---------------- */
+        let camStart = 0, camTimer = null;
+        function setBattery(level) {
+            const bars = Math.ceil(Math.max(0, Math.min(100, level || 0)) / 25);
+            const el = $("camBatt");
+            [...el.children].forEach((b, i) => b.classList.toggle("off", i >= bars));
+            el.classList.toggle("low", bars <= 1);
+        }
+        function setCamcorder(show, level) {
+            $("cam").classList.toggle("show", !!show);
+            clearInterval(camTimer);
+            if (show) {
+                camStart = Date.now();
+                setBattery(level);
+                camTimer = setInterval(() => {
+                    const t = Math.floor((Date.now() - camStart) / 1000);
+                    const hh = String(Math.floor(t / 3600)).padStart(2, "0");
+                    const mm = String(Math.floor(t / 60) % 60).padStart(2, "0");
+                    const ss = String(t % 60).padStart(2, "0");
+                    $("camTime").textContent = `${hh}:${mm}:${ss}`;
+                }, 250);
+            }
+        }
+        function setHide(kind) {
+            const el = $("hide");
+            el.className = kind ? ("show " + kind) : "";
+        }
+        function hurt() {
+            const el = $("hurt");
+            el.classList.remove("hit"); void el.offsetWidth; el.classList.add("hit");
+        }
+
+        /* ---------------- Audio ---------------- */
+        const FILE_MAP = {
+            heartbeat:   "heartbeat.mp3",
+            ambient:     "ambient.mp3",
+            growl_close: "monster-growl-close.mp3",
+            growl_far:   "monster-growl-far.mp3",
+            screech:     "monster-screech.mp3",
+            jumpscare:   "jumpscare.mp3"
+        };
+
+        let activeAudio = {};
+
+        let ducked = false;
+        const DUCK_ALLOWED = { jumpscare: true, screech: true };
+
+        function setDucked(on) {
+            ducked = on;
+            Object.values(activeAudio).forEach(a => { if (a) a.muted = on; });
+        }
+
+        function clamp(v, min, max, fallback) {
+            v = Number(v);
+            if (!isFinite(v)) return fallback;
+            return Math.min(max, Math.max(min, v));
+        }
+
+        function stopSound(soundId) {
+            const audio = activeAudio[soundId];
+            if (audio) { audio.pause(); audio.currentTime = 0; }
+            delete activeAudio[soundId];
+        }
+
+        function playSoundFile(soundId, loop, volume, rate, maxMs) {
+            const fileName = FILE_MAP[soundId];
+            if (!fileName) return null;
+            stopSound(soundId);
+
+            const audio = new Audio(fileName);
+            audio.loop = !!loop;
+            audio.volume = clamp(volume, 0, 1, 1);
+            audio.preservesPitch = false;
+            audio.playbackRate = clamp(rate, 0.25, 4, 1);
+
+            if (!audio.loop) {
+                audio.addEventListener("ended", () => {
+                    if (activeAudio[soundId] === audio) delete activeAudio[soundId];
+                });
+            }
+
+            if (maxMs && maxMs > 0) {
+                setTimeout(() => {
+                    if (activeAudio[soundId] !== audio) return;
+                    const startVol = audio.volume;
+                    let step = 0;
+                    const fade = setInterval(() => {
+                        step++;
+                        audio.volume = Math.max(0, startVol * (1 - step / 8));
+                        if (step >= 8) {
+                            clearInterval(fade);
+                            if (activeAudio[soundId] === audio) stopSound(soundId); else audio.pause();
+                        }
+                    }, 25);
+                }, maxMs);
+            }
+
+            audio.play().catch(err => console.error("Audio playback error for " + soundId + ":", err));
+            activeAudio[soundId] = audio;
+            return audio;
+        }
+
+        /* ---------------- Messages from Lua ---------------- */
+        window.addEventListener("message", (event) => {
+            const data = event.data || {};
+            switch (data.action) {
+                case "showWarning": showWarning(); break;
+                case "hideWarning": hideWarning(); break;
+
+                case "cineStart":   cineStart(data.skip); break;
+                case "cineEnd":     cineEnd(); setHide(false); setCamcorder(false); break;
+                case "caption":     showCaption(data.kicker, data.text, data.delay); break;
+                case "captionHide": clearTimeout(captionTimer); $("caption").classList.remove("show"); break;
+                case "title":       showTitle(data.text, data.sub); break;
+                case "camcorder":        setCamcorder(data.show, data.level); break;
+                case "camcorderBattery": setBattery(data.level); break;
+                case "hideOverlay":      setHide(data.kind); break;
+                case "hurt":             hurt(); break;
+                case "finalLine":   $("finalLine").textContent = data.text || ""; $("finalLine").classList.add("show"); break;
+
+                case "playHeartbeat": {
+                    if (ducked) break;
+                    const hb = activeAudio["heartbeat"];
+                    if (!hb) {
+                        playSoundFile("heartbeat", true, data.volume, data.speed);
+                    } else {
+                        if (hb.paused) hb.play().catch(() => {});
+                        hb.volume = clamp(data.volume, 0, 1, hb.volume);
+                        hb.playbackRate = clamp(data.speed, 0.25, 4, hb.playbackRate);
+                    }
+                    break;
+                }
+                case "stopHeartbeat": stopSound("heartbeat"); break;
+
+                case "playSound":
+                    if (ducked && !DUCK_ALLOWED[data.soundId] && !data.force) break;
+                    playSoundFile(data.soundId, data.loop || false, data.volume ?? 1.0, data.speed ?? 1.0, data.maxMs || 0);
+                    break;
+                case "stopSound": stopSound(data.soundId); break;
+                case "stopAll":
+                    Object.keys(activeAudio).forEach(stopSound);
+                    activeAudio = {};
+                    ducked = false;
+                    break;
+                case "duck":   setDucked(true); break;
+                case "unduck": setDucked(false); break;
+            }
+        });
+    </script>
+</body>
+</html>
