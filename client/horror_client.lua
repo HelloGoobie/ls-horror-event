@@ -1638,6 +1638,13 @@ function CreateMonster(token, preferredModel, callback)
             return
         end
 
+        local actuallyHuman = IsPedHuman(ped)
+        if actuallyHuman == isQuadruped then
+            print(('[HORROR WARNING] %s is configured as a %s but the game loaded it as a %s - using what the game says. If you just renamed models, restart FiveM.')
+                :format(modelName, isQuadruped and 'dog' or 'human', actuallyHuman and 'human' or 'dog'))
+            isQuadruped = not actuallyHuman
+        end
+
         local m = { ped = ped, model = modelName, state = 'PATROL', moveRate = 1.0, inView = false }
         table.insert(monsters, m)
         quadrupedPeds[ped] = isQuadruped
