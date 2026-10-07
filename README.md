@@ -118,15 +118,8 @@ five catches, the event is over.
 | --- | --- |
 | `/startHorror` | Start the event from anywhere |
 | `/stopHorror` | Leave the event |
-| `/horrorspot` | Add a hiding spot where you're standing, facing the way you want to peek |
-| `/horrorspot low` | Same, for under-a-bed style spots |
-| `/horroreggspot` | Add an easter egg spot where you're standing |
 | `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
 | `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
-
-`/horrorspot` and `/horroreggspot` add the spot for the current session and
-print a line in the F8 console. Paste it into `Config.HidingSpots` or
-`Config.EasterEggs.extraSpots` to keep it.
 
 ## Configuration
 

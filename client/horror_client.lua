@@ -2425,35 +2425,6 @@ function StartHidingLoop(token)
     end)
 end
 
-RegisterCommand('horrorspot', function(_, args)
-    local ped = PlayerPedId()
-    local c = GetEntityCoords(ped)
-    local found, groundZ = GetGroundZFor_3dCoord(c.x, c.y, c.z + 0.5, false)
-    local z = found and groundZ or (c.z - 1.0)
-    local low = args[1] == "low"
-    local spot = { coords = vector3(c.x, c.y, z), heading = GetEntityHeading(ped), low = low }
-    table.insert(Config.HidingSpots, spot)
-
-    local line = ("        { coords = vector3(%.4f, %.4f, %.4f), heading = %.2f, low = %s },"):format(c.x, c.y, z, spot.heading, tostring(low))
-    print("[HORROR] Hiding spot added for this session. Paste into Config.HidingSpots:")
-    print(line)
-    ShowNotification("Hiding spot saved for this session - copy the line from the F8 console.", 5000)
-end, false)
-
-RegisterCommand('horroreggspot', function()
-    local ped = PlayerPedId()
-    local c = GetEntityCoords(ped)
-    local found, groundZ = GetGroundZFor_3dCoord(c.x, c.y, c.z + 0.5, false)
-    local z = found and groundZ or (c.z - 1.0)
-    local spot = vector3(c.x, c.y, z)
-    Config.EasterEggs.extraSpots = Config.EasterEggs.extraSpots or {}
-    table.insert(Config.EasterEggs.extraSpots, spot)
-
-    print("[HORROR] Easter egg spot added for this session. Paste into Config.EasterEggs.extraSpots:")
-    print(("        vector3(%.4f, %.4f, %.4f),"):format(c.x, c.y, z))
-    ShowNotification("Easter egg spot saved for this session - copy the line from the F8 console.", 5000)
-end, false)
-
 local function MonsterWalkTo(monster, target, speed)
     if quadrupedPeds[monster] then
         TaskFollowNavMeshToCoord(monster, target.x, target.y, target.z, math.max(1.0, speed), -1, 1.0, 0, 0.0)
