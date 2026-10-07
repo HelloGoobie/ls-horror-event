@@ -121,11 +121,8 @@ five catches, the event is over.
 | `/horrorspot` | Add a hiding spot where you're standing, facing the way you want to peek |
 | `/horrorspot low` | Same, for under-a-bed style spots |
 | `/horroreggspot` | Add an easter egg spot where you're standing |
-| `/horrorforcenote morgue / tape / off` | Debug: force the next run to hide that note |
 | `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
 | `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
-| `/horrordragtest` | Testing only, with `/horrordebug` on: replay the caught cutscene with the nearest monster |
-| `/horrordebug` | Testing only: the monsters ignore you, and hiding spots, working fuses (green) and dead fuses (red) and the hidden easter egg are shown as labelled markers. Runs with debug on don't count towards stats or rewards |
 
 `/horrorspot` and `/horroreggspot` add the spot for the current session and
 print a line in the F8 console. Paste it into `Config.HidingSpots` or
@@ -202,8 +199,7 @@ The list is the `Titles` table at the top of the server file.
 ### Leaderboard and private runs
 
 The server keeps the ten fastest escapes per difficulty (one entry per player) and
-each player's personal best. Times are measured by the server, and debug runs never
-count.
+each player's personal best. Times are measured by the server.
 
 During a run each player is moved into their own routing bucket (`BucketBase` plus
 their server ID, 7000 by default) and returned to their previous bucket afterwards.

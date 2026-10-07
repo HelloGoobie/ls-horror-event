@@ -624,7 +624,7 @@
             box.style.setProperty("--accent", r.accent);
             $("sumKick").textContent = r.kick;
             $("sumTitle").textContent = r.title;
-            $("sumTag").textContent = (DIFF_TEXT[d.difficulty] || "Easy") + (d.debug ? "  ·  practice run (debug)" : "");
+            $("sumTag").textContent = (DIFF_TEXT[d.difficulty] || "Easy");
             const st = $("sumStats");
             st.replaceChildren(
                 stat("Time", fmtTime(d.seconds)),

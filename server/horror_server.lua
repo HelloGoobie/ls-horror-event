@@ -128,7 +128,6 @@ local function GiveNote(src, key)
         print('[ls-horror] vRP.tryGiveInventoryItem errored: ' .. tostring(err))
         return false
     end
-    print(('[ls-horror] gave %s (%s) to user %s'):format(itemId, key, tostring(userId)))
     return true
 end
 
@@ -244,7 +243,6 @@ local function CleanSummary(src, raw, run)
         tasersFired    = Num(raw.tasersFired, 999),
         lures          = Num(raw.lures, 5),
         item           = (type(raw.item) == 'string' and ValidItems[raw.item]) and raw.item or nil,
-        debug          = raw.debug == true,
     }
     if r.caught >= MaxCatches then r.escaped = false end
     return r
@@ -271,7 +269,7 @@ RegisterNetEvent('horror:runEnded', function(summary)
     if not run then return end
 
     local r = CleanSummary(src, summary, run)
-    if not r or r.debug then return end
+    if not r then return end
 
     local seconds = math.max(0, os.time() - run.started)
     local stats = GetStats(src)
