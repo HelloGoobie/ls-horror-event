@@ -14,13 +14,16 @@ client_scripts {
     'client/horror_client.lua'
 }
 
-server_script 'server/horror_server.lua'
+server_scripts {
+    'server/horror_server.lua'
+}
 
 ui_page 'html/index.html'
 
 files {
     'html/index.html',
     'html/*.mp3',
+    'html/*.png',
 
     'peds.meta'
 }

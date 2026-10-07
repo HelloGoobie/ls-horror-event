@@ -273,11 +273,18 @@ local Config = {
         chance  = 1.0,
         fallbackModels = { 'prop_cs_documents_01', 'prop_ld_case_01', 'prop_paper_bag_small' },
         extraSpots = {},
-        staffNote = {
-            enabled = true,
-            chance  = 0.05,
-            item = { id = 'staffnote', label = 'Staff Note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
-                     text = 'A Staff Note, tucked away where nobody would look. Lucky you.', effect = 'staffnote' },
+        rareNotes = {
+            {
+                enabled = true, chance = 0.005,
+                item = { id = 'morgue_tape', note = 'tape', label = 'Night Shift Log (Tape)',
+                         models = { 'prop_cs_cassette', 'prop_tapeplayer_01' },
+                         text = 'A cassette marked DO NOT ERASE. It has been added to your inventory.', effect = 'servernote' },
+            },
+            {
+                enabled = true, chance = 0.04,
+                item = { id = 'morgue_note', note = 'morgue', label = 'The Morgue note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
+                         text = 'A note left behind in the morgue. It has been added to your inventory.', effect = 'servernote' },
+            },
         },
         items = {
             { id = 'staffcard', label = 'Staff key card', models = { 'p_ld_id_card_01', 'prop_cs_swipe_card', 'p_ld_id_card_002' },
@@ -396,7 +403,6 @@ local triedExits = {}
 local doorsLockedUntil = 0
 local runStats = nil
 local lastTaserStatShot = 0
-local debugGhost = false
 local throwingBottle = false
 local secondWindReadyAt = 0
 local secondWindUntil = 0
@@ -1154,7 +1160,7 @@ function StartHorrorEvent(chosenDifficulty)
     runStats = {
         difficulty = difficulty, monsters = 0, startedNoTaser = taserMode == 'none',
         caught = 0, fuses = 0, stuns = 0, tasersFired = 0, bottlesThrown = 0, lures = 0,
-        item = nil, debug = debugGhost,
+        item = nil,
     }
     lastTaserStatShot = 0
     throwingBottle = false
@@ -1981,7 +1987,7 @@ function StartAssistLoop(token)
             local now = GetGameTimer()
             local ped = PlayerPedId()
             local level = 0.0
-            if not cutsceneActive and not playerHidden and not debugGhost then
+            if not cutsceneActive and not playerHidden then
                 local camPos = GetGameplayCamCoord()
                 local fwd = GetCamForward()
                 local pPos = GetEntityCoords(ped)
@@ -2181,7 +2187,6 @@ local function MonsterCanHear(monster, playerPed)
 end
 
 function MakeNoise(pos, radius, lure)
-    if debugGhost and not lure then return end
     lastNoise = { pos = pos, radius = radius, time = GetGameTimer(), lure = lure or false }
 end
 
@@ -2266,7 +2271,7 @@ function StartSecondWindLoop(token)
                 SetRunSprintMultiplierForPlayer(PlayerId(), 1.0)
                 boosted = false
             end
-            if sw.Enabled and Unarmed() and not debugGhost and not boosted and now >= secondWindReadyAt
+            if sw.Enabled and Unarmed() and not boosted and now >= secondWindReadyAt
                 and not cutsceneActive and not playerHidden and now > catchGraceUntil then
                 for _, m in ipairs(LiveMonsters()) do
                     if m.state == "CHASE" and #(GetEntityCoords(m.ped) - GetEntityCoords(PlayerPedId())) < sw.TriggerDist then
@@ -2419,76 +2424,6 @@ function StartHidingLoop(token)
         end
     end)
 end
-
-RegisterCommand('horrorspot', function(_, args)
-    local ped = PlayerPedId()
-    local c = GetEntityCoords(ped)
-    local found, groundZ = GetGroundZFor_3dCoord(c.x, c.y, c.z + 0.5, false)
-    local z = found and groundZ or (c.z - 1.0)
-    local low = args[1] == "low"
-    local spot = { coords = vector3(c.x, c.y, z), heading = GetEntityHeading(ped), low = low }
-    table.insert(Config.HidingSpots, spot)
-
-    local line = ("        { coords = vector3(%.4f, %.4f, %.4f), heading = %.2f, low = %s },"):format(c.x, c.y, z, spot.heading, tostring(low))
-    print("[HORROR] Hiding spot added for this session. Paste into Config.HidingSpots:")
-    print(line)
-    ShowNotification("Hiding spot saved for this session - copy the line from the F8 console.", 5000)
-end, false)
-
-RegisterCommand('horroreggspot', function()
-    local ped = PlayerPedId()
-    local c = GetEntityCoords(ped)
-    local found, groundZ = GetGroundZFor_3dCoord(c.x, c.y, c.z + 0.5, false)
-    local z = found and groundZ or (c.z - 1.0)
-    local spot = vector3(c.x, c.y, z)
-    Config.EasterEggs.extraSpots = Config.EasterEggs.extraSpots or {}
-    table.insert(Config.EasterEggs.extraSpots, spot)
-
-    print("[HORROR] Easter egg spot added for this session. Paste into Config.EasterEggs.extraSpots:")
-    print(("        vector3(%.4f, %.4f, %.4f),"):format(c.x, c.y, z))
-    ShowNotification("Easter egg spot saved for this session - copy the line from the F8 console.", 5000)
-end, false)
-
--- ============================================================
--- DEBUG MODE
--- ============================================================
-RegisterCommand('horrordebug', function()
-    debugGhost = not debugGhost
-    if debugGhost and runStats then runStats.debug = true end
-    if debugGhost then
-        catchGraceUntil = 0
-        ShowNotification("~y~Horror debug ON~s~ - the monsters can't see, hear or catch you.", 6000)
-        StartDebugMarkerLoop()
-    else
-        ShowNotification("Horror debug ~r~OFF~s~ - you're being hunted again.", 4000)
-    end
-end, false)
-
-function StartDebugMarkerLoop()
-    CreateThread(function()
-        while debugGhost do
-            local p = GetEntityCoords(PlayerPedId())
-            for _, spot in ipairs(Config.HidingSpots) do
-                if #(spot.coords - p) < 40.0 then
-                    DrawMarker(1, spot.coords.x, spot.coords.y, spot.coords.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                        0.8, 0.8, 0.4, 60, 140, 255, 140, false, false, 2, false, nil, nil, false)
-                end
-            end
-            for _, c in ipairs(Config.EasterEggs.extraSpots or {}) do
-                if #(c - p) < 40.0 then
-                    DrawMarker(1, c.x, c.y, c.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                        0.5, 0.5, 0.6, 255, 210, 40, 160, false, false, 2, false, nil, nil, false)
-                end
-            end
-            if eggPos and not eggFound and #(eggPos - p) < 40.0 then
-                DrawMarker(2, eggPos.x, eggPos.y, eggPos.z + 0.6, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0,
-                    0.3, 0.3, 0.3, 255, 120, 0, 200, true, false, 2, false, nil, nil, false)
-            end
-            Wait(0)
-        end
-    end)
-end
-
 
 local function MonsterWalkTo(monster, target, speed)
     if quadrupedPeds[monster] then
@@ -3110,28 +3045,6 @@ function PlayDragCutscene(token, monster, playerPed)
     return true
 end
 
-RegisterCommand('horrordragtest', function()
-    if not isEventActive or not debugGhost then
-        ShowNotification("Turn on /horrordebug during a run to use /horrordragtest.", 4000)
-        return
-    end
-    local m = ClosestMonster()
-    if not m then return end
-    local token = eventSession
-    CreateThread(function()
-        local ped = PlayerPedId()
-        local back = GetEntityCoords(ped)
-        local heading = GetEntityHeading(ped)
-        DoScreenFadeOut(200)
-        Wait(220)
-        local mp = GetEntityCoords(m.ped)
-        SetEntityCoordsNoOffset(ped, mp.x, mp.y, mp.z, false, false, false)
-        PlayDragCutscene(token, m.ped, ped)
-        SafeTeleport(ped, back, heading)
-        DoScreenFadeIn(500)
-    end)
-end, false)
-
 local function HandlePlayerCaught(token, monster, playerPed)
     DoScreenFadeOut(0)
     AnimpostfxStopAll()
@@ -3408,14 +3321,8 @@ function StartStalkerAI(token, m)
             end
 
             local lured = now < (m.luredUntil or 0)
-            local ghost = debugGhost
-            local sees = not lured and not ghost and MonsterCanSee(monster, playerPed)
-            local hears = not lured and not ghost and MonsterCanHear(monster, playerPed)
-            if ghost and (m.state == "CHASE" or m.state == "PULLOUT" or m.state == "SEARCH" or m.state == "INVESTIGATE") then
-                SetState(monster, "PATROL")
-                m.patrolTarget = nil
-                sightAccum = 0
-            end
+            local sees = not lured and MonsterCanSee(monster, playerPed)
+            local hears = not lured and MonsterCanHear(monster, playerPed)
             if sees then
                 sightAccum = sightAccum + dt
                 lastSawPlayerAt = now
@@ -3428,7 +3335,7 @@ function StartStalkerAI(token, m)
 
             m.inView = (not playerHidden) and IsMonsterInPlayerView(playerPed, monster, 0.75, 30.0)
 
-            local touching = not playerHidden and not ghost and not cutsceneActive and m.state ~= "RECOVER"
+            local touching = not playerHidden and not cutsceneActive and m.state ~= "RECOVER"
                 and now - lastMeleeAt > Config.Stun.PunchGraceMs
                 and now > catchGraceUntil and zDiff < 3.0 and dist < Config.CatchDistance
 
@@ -3799,8 +3706,11 @@ function SpawnEasterEgg(token)
     local spots = EggSpots()
     if #spots == 0 or #cfg.items == 0 then return end
     local item = cfg.items[math.random(#cfg.items)]
-    if cfg.staffNote and cfg.staffNote.enabled and math.random() < cfg.staffNote.chance then
-        item = cfg.staffNote.item
+    for _, r in ipairs(cfg.rareNotes or {}) do
+        if r.enabled and math.random() < r.chance then
+            item = r.item
+            break
+        end
     end
 
     local hash
@@ -3876,8 +3786,8 @@ local function CollectEasterEgg()
         taserMode, taserShotsLeft = 'limited', (item.amount or 2)
     elseif item.effect == 'life' then
         timesCaught = math.max(0, timesCaught - 1)
-    elseif item.effect == 'staffnote' then
-        TriggerServerEvent('horror:staffNoteFound')
+    elseif item.effect == 'servernote' then
+        TriggerServerEvent('horror:noteFound', item.note)
         ShowNotification(("~y~SECRET FOUND: %s~s~~n~%s"):format(item.label, item.text), 9000)
         return
     end
@@ -4101,8 +4011,8 @@ function EndHorrorEvent(escaped, silent, message)
         caught = timesCaught, maxCatches = MaxCatches(),
         fuses = fusesCollected, fusesNeeded = totalFusesRequired,
         item = (eggFound and eggItem) and eggItem.label or nil,
+        noteImage = (eggFound and eggItem and eggItem.effect == 'servernote' and (eggItem.note == 'morgue' or eggItem.note == 'tape')) and eggItem.note or nil,
         stuns = summary.stuns or 0, lures = summary.lures or 0,
-        debug = summary.debug == true,
     }
     TriggerServerEvent('horror:runEnded', summary)
     SendNUIMessage({ action = "behind", level = 0 })

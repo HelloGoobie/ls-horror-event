@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CPedModelInfoVar__InitDataList>
+  <InitDataEntries>
+    <Item>
+      <ModelName>u_m_y_juggernaut_01</ModelName>
+      <TxdName>u_m_y_juggernaut_01</TxdName>
+      <DlcName>u_m_y_juggernaut_01</DlcName>
+      <Type>PED_TYPE_POP_STRIP_CLUB</Type>
+      <PedType>STD_PED</PedType>
+      <DefaultVoice></DefaultVoice>
+      <Animations></Animations>
+      <Spreads></Spreads>
+      <agsRelatedSeed>0</agsRelatedSeed>
+      <capRelatedSeed>0</capRelatedSeed>
+      <clothClothName></clothClothName>
+      <clothDictionary></clothDictionary>
+      <creatureMetadata></creatureMetadata>
+      <standardSettings>
+        <item>1</item>
+      </standardSettings>
+      <isStreamed>true</isStreamed>
+      <!-- Add other required peds.meta flags specific to your custom model layout -->
+    </Item>
+  </InitDataEntries>
+</CPedModelInfoVar__InitDataList>

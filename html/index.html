@@ -88,6 +88,15 @@
             opacity: 0; transition: opacity .9s ease;
         }
         #summary.show { opacity: 1; }
+        #summary .note {
+            position: absolute; right: 6vw; top: 50%; height: 62vh; aspect-ratio: 5 / 7;
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+            filter: drop-shadow(0 18px 40px rgba(0, 0, 0, .85));
+            opacity: 0; transform: translateY(-46%) rotate(5deg) scale(.94);
+            transition: opacity 1.4s ease .5s, transform 1.6s cubic-bezier(.2, .8, .2, 1) .5s;
+        }
+        #summary.show .note { opacity: 1; transform: translateY(-50%) rotate(3deg); }
+        #summary .note[hidden] { display: none; }
         #summary .inner { text-align: center; transform: translateY(10px); transition: transform 1.2s cubic-bezier(.2, .8, .2, 1); }
         #summary.show .inner { transform: none; }
         #summary .kick { font-size: 12px; font-weight: 600; letter-spacing: .5em; padding-left: .5em; color: var(--accent, var(--red)); }
@@ -372,6 +381,7 @@
 
     <!-- Run summary -->
     <div id="summary" aria-hidden="true">
+        <div class="note" id="sumNote" hidden></div>
         <div class="inner">
             <div class="kick" id="sumKick"></div>
             <h2 id="sumTitle"></h2>
@@ -614,7 +624,7 @@
             box.style.setProperty("--accent", r.accent);
             $("sumKick").textContent = r.kick;
             $("sumTitle").textContent = r.title;
-            $("sumTag").textContent = (DIFF_TEXT[d.difficulty] || "Easy") + (d.debug ? "  ·  practice run (debug)" : "");
+            $("sumTag").textContent = (DIFF_TEXT[d.difficulty] || "Easy");
             const st = $("sumStats");
             st.replaceChildren(
                 stat("Time", fmtTime(d.seconds)),
@@ -626,6 +636,14 @@
             st.firstChild.id = "sumTime";
             $("sumExtra").replaceChildren();
             if (d.item) $("sumExtra").appendChild(el("div", "line found", "Found: " + d.item));
+            const noteEl = $("sumNote");
+            if (d.noteImage === "morgue" || d.noteImage === "tape") {
+                noteEl.style.backgroundImage = 'url("note_' + d.noteImage + '.png")';
+                noteEl.hidden = false;
+            } else {
+                noteEl.hidden = true;
+                noteEl.style.backgroundImage = "";
+            }
             box.classList.add("show");
             box.setAttribute("aria-hidden", "false");
         }

@@ -1,8 +1,16 @@
-local MinSecondsIntoRun = 30
+local MinSecondsIntoRun = 5
 local MinEscapeSeconds = 60
 local MaxCatches = 5
 local UseRoutingBuckets = true
 local BucketBase = 7000
+local NoteItems = {
+    morgue = 'morgue',
+    tape   = 'morgue_tape',
+}
+local NoteMessages = {
+    morgue = 'The Morgue note has been added to your account.',
+    tape   = 'A tape has been added to your account.',
+}
 local runs = {}
 local buckets = {}
 
@@ -47,7 +55,7 @@ local Titles = {
       run = function(r) return r.escaped and r.difficulty == 'extreme' and r.caught == 0 end },
 }
 
-local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, staffnote = true }
+local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, morgue_note = true, morgue_tape = true }
 
 -- ============================================================
 -- TRANSPORT TYCOON HOOKS
@@ -75,9 +83,51 @@ local function GiveTitle(src, title)
     return true
 end
 
-local function GiveStaffNote(src)
-    -- TODO(Transport Tycoon): replace this with the vRP call that gives one Staff Note to the player.
-    print(('[HORROR] Staff Note found by %s (%d) - placeholder, nothing was given'):format(GetPlayerName(src) or '?', src))
+local vRP
+local function GetVRP()
+    if vRP then return vRP end
+    local ok, proxy = pcall(function()
+        if type(module) == 'function' then return module("vrp", "lib/Proxy") end
+        -- @vrp/lib/utils.lua isn't loaded: read vRP's Proxy.lua ourselves
+        local code = LoadResourceFile("vrp", "lib/Proxy.lua")
+        if not code then error('vrp/lib/Proxy.lua not found - is the vrp resource started?') end
+        local f, err = load(code, '@vrp/lib/Proxy.lua')
+        if not f then error(err) end
+        return f()
+    end)
+    if not ok or not proxy then
+        print('[ls-horror] could not load vrp lib/Proxy: ' .. tostring(proxy))
+        return nil
+    end
+    local ok2, iface = pcall(function() return proxy.getInterface("vRP") end)
+    if not ok2 or not iface then
+        print('[ls-horror] could not get the vRP interface: ' .. tostring(iface))
+        return nil
+    end
+    vRP = iface
+    return vRP
+end
+
+local function GiveNote(src, key)
+    local itemId = NoteItems[key]
+    if not itemId then return false end
+    local v = GetVRP()
+    if not v then return false end
+    local ok, userId = pcall(function() return v.getUserId({src}) end)
+    if not ok then
+        print('[ls-horror] vRP.getUserId errored: ' .. tostring(userId))
+        return false
+    end
+    if not userId then
+        print(('[ls-horror] vRP.getUserId returned nothing for source %s - vrp may have been restarted after ls-horror, restart ls-horror too'):format(tostring(src)))
+        vRP = nil
+        return false
+    end
+    local ok2, err = pcall(function() v.tryGiveInventoryItem({userId, itemId, 1}) end)
+    if not ok2 then
+        print('[ls-horror] vRP.tryGiveInventoryItem errored: ' .. tostring(err))
+        return false
+    end
     return true
 end
 
@@ -94,6 +144,8 @@ local function Defaults(s)
     s.stuns       = s.stuns or 0
     s.lures       = s.lures or 0
     s.staffNotes  = s.staffNotes or 0
+    s.morgueNotes = s.morgueNotes or 0
+    s.tapes       = s.tapes or 0
     s.items       = s.items or {}
     s.titles      = s.titles or {}
     s.best        = s.best or {}
@@ -191,7 +243,6 @@ local function CleanSummary(src, raw, run)
         tasersFired    = Num(raw.tasersFired, 999),
         lures          = Num(raw.lures, 5),
         item           = (type(raw.item) == 'string' and ValidItems[raw.item]) and raw.item or nil,
-        debug          = raw.debug == true,
     }
     if r.caught >= MaxCatches then r.escaped = false end
     return r
@@ -218,7 +269,7 @@ RegisterNetEvent('horror:runEnded', function(summary)
     if not run then return end
 
     local r = CleanSummary(src, summary, run)
-    if not r or r.debug then return end
+    if not r then return end
 
     local seconds = math.max(0, os.time() - run.started)
     local stats = GetStats(src)
@@ -241,7 +292,7 @@ RegisterNetEvent('horror:runEnded', function(summary)
     stats.fuses  = stats.fuses + r.fuses
     stats.stuns  = stats.stuns + r.stuns
     stats.lures  = stats.lures + r.lures
-    if r.item and r.item ~= 'staffnote' then
+    if r.item and r.item ~= 'morgue_note' and r.item ~= 'morgue_tape' then
         stats.items[r.item] = (stats.items[r.item] or 0) + 1
     end
 
@@ -252,17 +303,28 @@ RegisterNetEvent('horror:runEnded', function(summary)
     TriggerClientEvent('horror:runResult', src, result)
 end)
 
-RegisterNetEvent('horror:staffNoteFound', function()
+local NoteCounters = { morgue = 'morgueNotes', tape = 'tapes' }
+
+RegisterNetEvent('horror:noteFound', function(key)
     local src = source
+    if type(key) ~= 'string' or not NoteItems[key] then return end
     local run = runs[src]
     if not run or run.noteClaimed then return end
-    if os.time() - run.started < MinSecondsIntoRun then return end
+    if os.time() - run.started < MinSecondsIntoRun then
+        print(('[ls-horror] note %s ignored for %s: picked up within %ds of starting'):format(key, src, MinSecondsIntoRun))
+        TriggerClientEvent('horror:notify', src, '~r~Too quick - the note crumbles. Try again next run.', 5000)
+        return
+    end
 
     run.noteClaimed = true
-    if GiveStaffNote(src) then
-        TriggerClientEvent('horror:notify', src, '~g~A Staff Note has been added to your account.', 6000)
+    if not GiveNote(src, key) then
+        print(('[ls-horror] note %s could not be given to %s (vrp not running, or player has no user id)'):format(key, src))
+        TriggerClientEvent('horror:notify', src, '~r~The note could not be added to your inventory.', 5000)
+    else
+        TriggerClientEvent('horror:notify', src, '~g~' .. NoteMessages[key], 6000)
         local stats = GetStats(src)
-        stats.staffNotes = stats.staffNotes + 1
+        local counter = NoteCounters[key]
+        stats[counter] = (stats[counter] or 0) + 1
         CheckTitles(src, stats, nil)
         SaveStats(src, stats)
     end

@@ -32,8 +32,9 @@ while an Outlast-style monster hunts them through the building.
 - **Easter eggs.** One hidden item per run: a key card that reveals the real
   exit, spare batteries, a teddy that gives back a life, a taser stun pack or a
   lore tape. Each can be found once per run.
-- **Staff Note.** A 5% chance per run that the easter egg is a Staff Note,
-  given by the server.
+- **Rare notes.** On top of the normal easter egg there is a small chance that the
+  hidden item is a note given by the server, on every difficulty: The Morgue note (4%) or, very rarely, the Night Shift Log tape (0.5%). Only one note
+  can be found per run.
 - **Stats and chat titles.** The server keeps each player's lifetime stats and
   unlocks chat titles for milestones and challenge runs.
 - **Objectives.** Real fuses are hidden among identical dead ones (3–6 on Easy, up
@@ -117,17 +118,8 @@ five catches, the event is over.
 | --- | --- |
 | `/startHorror` | Start the event from anywhere |
 | `/stopHorror` | Leave the event |
-| `/horrorspot` | Add a hiding spot where you're standing, facing the way you want to peek |
-| `/horrorspot low` | Same, for under-a-bed style spots |
-| `/horroreggspot` | Add an easter egg spot where you're standing |
 | `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
 | `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
-| `/horrordragtest` | Testing only, with `/horrordebug` on: replay the caught cutscene with the nearest monster |
-| `/horrordebug` | Testing only: the monsters ignore you, and hiding and egg spots are shown as markers. Runs with debug on don't count towards stats or rewards |
-
-`/horrorspot` and `/horroreggspot` add the spot for the current session and
-print a line in the F8 console. Paste it into `Config.HidingSpots` or
-`Config.EasterEggs.extraSpots` to keep it.
 
 ## Configuration
 
@@ -152,7 +144,7 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `FirstPerson` | How much wider the first-person view is during the run (restored afterwards) |
 | `Atmosphere` | Flickering ceiling lights, power surges, emergency lights and the scream cooldown |
 | `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
-| `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |
+| `EasterEggs` | Easter egg items, their effects, extra spots and the rare note chances (`rareNotes`) |
 | `HidingSpots` | Hiding spot list |
 | `Jumpscare` | Volume, strobe, rumble and double-scare chance |
 | `ShowContentWarning`, `PlayIntroCutscene`, `CutsceneRevealsExit`, `AllowCutsceneSkip` | Intro and warning options |
@@ -200,8 +192,7 @@ The list is the `Titles` table at the top of the server file.
 ### Leaderboard and private runs
 
 The server keeps the ten fastest escapes per difficulty (one entry per player) and
-each player's personal best. Times are measured by the server, and debug runs never
-count.
+each player's personal best. Times are measured by the server.
 
 During a run each player is moved into their own routing bucket (`BucketBase` plus
 their server ID, 7000 by default) and returned to their previous bucket afterwards.
@@ -216,7 +207,7 @@ Four functions are marked `TODO(Transport Tycoon)`:
 | `PlayerKey` | Your player ID (for example the vRP user ID) |
 | `LoadStats`, `SaveStats` | Your own storage. By default, stats are saved in resource KVP |
 | `GiveTitle` | Your chat title unlock |
-| `GiveStaffNote` | Giving one Staff Note |
+| `GiveNote` | Already calls `vRP.tryGiveInventoryItem({user_id, item, 1})`; set the item IDs in `NoteItems` at the top of `server/horror_server.lua` (`morgue`, `morgue_tape`) |
 
 Until they're replaced, titles and Staff Notes are only printed in the server
 console. Other resources can use:
@@ -230,6 +221,39 @@ AddEventHandler('horror:titleEarned', function(source, id, name, colour) end)
 
 When a player is caught for the last time, the client also fires
 `horror:playerCaught`.
+
+### Image notes with sound (Transport Tycoon inventory)
+
+The inventory builds a note's menu entry from `note|Title|Body` and writes the title and
+body in with `innerHTML`, so plain HTML works in both parts. The description box is
+rebuilt every time the selection moves, which means anything inside the body starts when
+the player hovers the item and stops as soon as they move off it.
+
+The two notes are an image in the body, and for the tape, an iframe next to it that
+plays the audio:
+
+```
+note|Night Shift Log|<img src="https://YOUR-HOST/note_tape.png" style="width:100%"/><iframe width="1" height="1" frameborder="0" allow="autoplay" style="display:none" srcdoc="<audio autoplay src='https://YOUR-HOST/morgue_log.mp3'></audio>"></iframe>
+```
+
+- The iframe is 1x1 and hidden. Its `srcdoc` holds a single `<audio autoplay>` tag, so the
+  sound starts as soon as the description is drawn, the same way the existing YouTube
+  embed notes work. Use single quotes inside `srcdoc` so the outer double quotes are not
+  broken.
+- The same `<audio autoplay src=...>` tag, put straight into the note body without the
+  iframe, played correctly in the local test inventory. The iframe just wraps it the way
+  the YouTube embed notes do, so use whichever your inventory accepts; the iframe form
+  has not been tried on Transport Tycoon itself.
+- `morgue_log.mp3` is 22.5 seconds. It plays through in full as long as the player stays
+  on the item, and restarts if they move off and back on.
+- Files must be on a public HTTPS URL the player's game can reach (the same place the
+  existing note images are hosted). Give new files a new name when you replace them,
+  because the game's browser caches audio and images by URL.
+- The Morgue note is the same format with only the `<img>` and no iframe, so it stays
+  silent.
+- If the inventory shows the item id as an image (like `goobie`), that mapping is done on
+  the server side, so for these two items either add that mapping or use the
+  `note|...` form above.
 
 ## File structure
 
