@@ -216,7 +216,7 @@ Four functions are marked `TODO(Transport Tycoon)`:
 | `PlayerKey` | Your player ID (for example the vRP user ID) |
 | `LoadStats`, `SaveStats` | Your own storage. By default, stats are saved in resource KVP |
 | `GiveTitle` | Your chat title unlock |
-| `GiveStaffNote` | Giving one Staff Note |
+| `GiveStaffNote` | Already calls `vRP.tryGiveInventoryItem({user_id, StaffNoteItem, 1})`; set `StaffNoteItem` at the top of `server/horror_server.lua` to the real item ID |
 
 Until they're replaced, titles and Staff Notes are only printed in the server
 console. Other resources can use:

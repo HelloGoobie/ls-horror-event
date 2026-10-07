@@ -3,6 +3,7 @@ local MinEscapeSeconds = 60
 local MaxCatches = 5
 local UseRoutingBuckets = true
 local BucketBase = 7000
+local StaffNoteItem = 'staff_note'
 local runs = {}
 local buckets = {}
 
@@ -75,9 +76,25 @@ local function GiveTitle(src, title)
     return true
 end
 
+local vRP
+local function GetVRP()
+    if vRP then return vRP end
+    local ok, proxy = pcall(function() return module("vrp", "lib/Proxy") end)
+    if not ok or not proxy then return nil end
+    local ok2, iface = pcall(function() return proxy.getInterface("vRP") end)
+    if ok2 then vRP = iface end
+    return vRP
+end
+
 local function GiveStaffNote(src)
-    -- TODO(Transport Tycoon): replace this with the vRP call that gives one Staff Note to the player.
-    print(('[HORROR] Staff Note found by %s (%d) - placeholder, nothing was given'):format(GetPlayerName(src) or '?', src))
+    local v = GetVRP()
+    if not v then
+        print(('[HORROR] Staff Note found by %s (%d) - vRP not found, nothing was given'):format(GetPlayerName(src) or '?', src))
+        return false
+    end
+    local userId = v.getUserId({src})
+    if not userId then return false end
+    v.tryGiveInventoryItem({userId, StaffNoteItem, 1})
     return true
 end
 
