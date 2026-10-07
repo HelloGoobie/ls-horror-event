@@ -86,11 +86,15 @@ end
 local vRP
 local function GetVRP()
     if vRP then return vRP end
-    if type(module) ~= 'function' then
-        print('[ls-horror] "module" is not defined - @vrp/lib/utils.lua did not load (is the vrp resource started?)')
-        return nil
-    end
-    local ok, proxy = pcall(function() return module("vrp", "lib/Proxy") end)
+    local ok, proxy = pcall(function()
+        if type(module) == 'function' then return module("vrp", "lib/Proxy") end
+        -- @vrp/lib/utils.lua isn't loaded: read vRP's Proxy.lua ourselves
+        local code = LoadResourceFile("vrp", "lib/Proxy.lua")
+        if not code then error('vrp/lib/Proxy.lua not found - is the vrp resource started?') end
+        local f, err = load(code, '@vrp/lib/Proxy.lua')
+        if not f then error(err) end
+        return f()
+    end)
     if not ok or not proxy then
         print('[ls-horror] could not load vrp lib/Proxy: ' .. tostring(proxy))
         return nil
