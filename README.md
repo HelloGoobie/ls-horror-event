@@ -32,8 +32,10 @@ while an Outlast-style monster hunts them through the building.
 - **Easter eggs.** One hidden item per run: a key card that reveals the real
   exit, spare batteries, a teddy that gives back a life, a taser stun pack or a
   lore tape. Each can be found once per run.
-- **Staff Note.** A 5% chance per run that the easter egg is a Staff Note,
-  given by the server.
+- **Rare notes.** On top of the normal easter egg there is a small chance that the
+  hidden item is a note given by the server, on every difficulty: a Staff Note (5%),
+  The Morgue note (4%) or, very rarely, the Night Shift Log tape (0.5%). Only one note
+  can be found per run.
 - **Stats and chat titles.** The server keeps each player's lifetime stats and
   unlocks chat titles for milestones and challenge runs.
 - **Objectives.** Real fuses are hidden among identical dead ones (3–6 on Easy, up
@@ -120,6 +122,7 @@ five catches, the event is over.
 | `/horrorspot` | Add a hiding spot where you're standing, facing the way you want to peek |
 | `/horrorspot low` | Same, for under-a-bed style spots |
 | `/horroreggspot` | Add an easter egg spot where you're standing |
+| `/horrorforcenote staff|morgue|tape|off` | Debug: force the next run to hide that note |
 | `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
 | `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
 | `/horrordragtest` | Testing only, with `/horrordebug` on: replay the caught cutscene with the nearest monster |
@@ -152,7 +155,7 @@ Everything lives in the `Config` table at the top of `client/horror_client.lua`.
 | `FirstPerson` | How much wider the first-person view is during the run (restored afterwards) |
 | `Atmosphere` | Flickering ceiling lights, power surges, emergency lights and the scream cooldown |
 | `Unarmed` | No-taser help: bottles, lure time, adrenaline burst, slower chase |
-| `EasterEggs` | Easter egg items, their effects, extra spots and the Staff Note chance |
+| `EasterEggs` | Easter egg items, their effects, extra spots and the rare note chances (`rareNotes`) |
 | `HidingSpots` | Hiding spot list |
 | `Jumpscare` | Volume, strobe, rumble and double-scare chance |
 | `ShowContentWarning`, `PlayIntroCutscene`, `CutsceneRevealsExit`, `AllowCutsceneSkip` | Intro and warning options |
@@ -216,7 +219,7 @@ Four functions are marked `TODO(Transport Tycoon)`:
 | `PlayerKey` | Your player ID (for example the vRP user ID) |
 | `LoadStats`, `SaveStats` | Your own storage. By default, stats are saved in resource KVP |
 | `GiveTitle` | Your chat title unlock |
-| `GiveStaffNote` | Already calls `vRP.tryGiveInventoryItem({user_id, StaffNoteItem, 1})`; set `StaffNoteItem` at the top of `server/horror_server.lua` to the real item ID |
+| `GiveNote` | Already calls `vRP.tryGiveInventoryItem({user_id, item, 1})`; set the item IDs in `NoteItems` at the top of `server/horror_server.lua` (`goobie`, `morgue`, `morgue_tape`) |
 
 Until they're replaced, titles and Staff Notes are only printed in the server
 console. Other resources can use:

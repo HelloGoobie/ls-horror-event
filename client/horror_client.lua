@@ -281,11 +281,23 @@ local Config = {
         chance  = 1.0,
         fallbackModels = { 'prop_cs_documents_01', 'prop_ld_case_01', 'prop_paper_bag_small' },
         extraSpots = {},
-        staffNote = {
-            enabled = true,
-            chance  = 0.05,
-            item = { id = 'staffnote', label = 'Staff Note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
-                     text = 'A Staff Note, tucked away where nobody would look. Lucky you.', effect = 'staffnote' },
+        rareNotes = {
+            {
+                enabled = true, chance = 0.005,
+                item = { id = 'morgue_tape', note = 'tape', label = 'Night Shift Log (Tape)',
+                         models = { 'prop_cs_cassette', 'prop_tapeplayer_01' },
+                         text = 'A cassette marked DO NOT ERASE. It has been added to your inventory.', effect = 'servernote' },
+            },
+            {
+                enabled = true, chance = 0.04,
+                item = { id = 'morgue_note', note = 'morgue', label = 'The Morgue note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
+                         text = 'A note left behind in the morgue. It has been added to your inventory.', effect = 'servernote' },
+            },
+            {
+                enabled = true, chance = 0.05,
+                item = { id = 'staffnote', note = 'staff', label = 'Staff Note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
+                         text = 'A Staff Note, tucked away where nobody would look. Lucky you.', effect = 'servernote' },
+            },
         },
         items = {
             { id = 'staffcard', label = 'Staff key card', models = { 'p_ld_id_card_01', 'prop_cs_swipe_card', 'p_ld_id_card_002' },
@@ -2465,6 +2477,20 @@ RegisterCommand('horroreggspot', function()
     ShowNotification("Easter egg spot saved for this session - copy the line from the F8 console.", 5000)
 end, false)
 
+debugForcedNote = nil
+RegisterCommand('horrorforcenote', function(_, args)
+    local key = args[1]
+    if key == 'off' or not key then
+        debugForcedNote = nil
+        ShowNotification("Forced note cleared.", 3000)
+    elseif key == 'staff' or key == 'morgue' or key == 'tape' then
+        debugForcedNote = key
+        ShowNotification(("The next run will hide the %s note."):format(key), 4000)
+    else
+        ShowNotification("Use /horrorforcenote staff, morgue, tape or off.", 4000)
+    end
+end, false)
+
 -- ============================================================
 -- DEBUG MODE
 -- ============================================================
@@ -3815,8 +3841,20 @@ function SpawnEasterEgg(token)
     local spots = EggSpots()
     if #spots == 0 or #cfg.items == 0 then return end
     local item = cfg.items[math.random(#cfg.items)]
-    if cfg.staffNote and cfg.staffNote.enabled and math.random() < cfg.staffNote.chance then
-        item = cfg.staffNote.item
+    local function RareNoteByKey(key)
+        for _, r in ipairs(cfg.rareNotes or {}) do
+            if r.item.note == key then return r.item end
+        end
+    end
+    if debugForcedNote then
+        item = RareNoteByKey(debugForcedNote) or item
+    else
+        for _, r in ipairs(cfg.rareNotes or {}) do
+            if r.enabled and math.random() < r.chance then
+                item = r.item
+                break
+            end
+        end
     end
 
     local hash
@@ -3892,8 +3930,8 @@ local function CollectEasterEgg()
         taserMode, taserShotsLeft = 'limited', (item.amount or 2)
     elseif item.effect == 'life' then
         timesCaught = math.max(0, timesCaught - 1)
-    elseif item.effect == 'staffnote' then
-        TriggerServerEvent('horror:staffNoteFound')
+    elseif item.effect == 'servernote' then
+        TriggerServerEvent('horror:noteFound', item.note)
         ShowNotification(("~y~SECRET FOUND: %s~s~~n~%s"):format(item.label, item.text), 9000)
         return
     end

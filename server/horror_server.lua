@@ -3,7 +3,16 @@ local MinEscapeSeconds = 60
 local MaxCatches = 5
 local UseRoutingBuckets = true
 local BucketBase = 7000
-local StaffNoteItem = 'goobie'
+local NoteItems = {
+    staff  = 'goobie',
+    morgue = 'morgue',
+    tape   = 'morgue_tape',
+}
+local NoteMessages = {
+    staff  = 'A Staff Note has been added to your account.',
+    morgue = 'The Morgue note has been added to your account.',
+    tape   = 'A tape has been added to your account.',
+}
 local runs = {}
 local buckets = {}
 
@@ -48,7 +57,7 @@ local Titles = {
       run = function(r) return r.escaped and r.difficulty == 'extreme' and r.caught == 0 end },
 }
 
-local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, staffnote = true }
+local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, staffnote = true, morgue_note = true, morgue_tape = true }
 
 -- ============================================================
 -- TRANSPORT TYCOON HOOKS
@@ -86,15 +95,17 @@ local function GetVRP()
     return vRP
 end
 
-local function GiveStaffNote(src)
+local function GiveNote(src, key)
+    local itemId = NoteItems[key]
+    if not itemId then return false end
     local v = GetVRP()
     if not v then
-        print(('[HORROR] Staff Note found by %s (%d) - vRP not found, nothing was given'):format(GetPlayerName(src) or '?', src))
+        print(('[HORROR] Note "%s" found by %s (%d) - vRP not found, nothing was given'):format(key, GetPlayerName(src) or '?', src))
         return false
     end
     local userId = v.getUserId({src})
     if not userId then return false end
-    v.tryGiveInventoryItem({userId, StaffNoteItem, 1})
+    v.tryGiveInventoryItem({userId, itemId, 1})
     return true
 end
 
@@ -111,6 +122,8 @@ local function Defaults(s)
     s.stuns       = s.stuns or 0
     s.lures       = s.lures or 0
     s.staffNotes  = s.staffNotes or 0
+    s.morgueNotes = s.morgueNotes or 0
+    s.tapes       = s.tapes or 0
     s.items       = s.items or {}
     s.titles      = s.titles or {}
     s.best        = s.best or {}
@@ -258,7 +271,7 @@ RegisterNetEvent('horror:runEnded', function(summary)
     stats.fuses  = stats.fuses + r.fuses
     stats.stuns  = stats.stuns + r.stuns
     stats.lures  = stats.lures + r.lures
-    if r.item and r.item ~= 'staffnote' then
+    if r.item and r.item ~= 'staffnote' and r.item ~= 'morgue_note' and r.item ~= 'morgue_tape' then
         stats.items[r.item] = (stats.items[r.item] or 0) + 1
     end
 
@@ -269,17 +282,21 @@ RegisterNetEvent('horror:runEnded', function(summary)
     TriggerClientEvent('horror:runResult', src, result)
 end)
 
-RegisterNetEvent('horror:staffNoteFound', function()
+local NoteCounters = { staff = 'staffNotes', morgue = 'morgueNotes', tape = 'tapes' }
+
+RegisterNetEvent('horror:noteFound', function(key)
     local src = source
+    if type(key) ~= 'string' or not NoteItems[key] then return end
     local run = runs[src]
     if not run or run.noteClaimed then return end
     if os.time() - run.started < MinSecondsIntoRun then return end
 
     run.noteClaimed = true
-    if GiveStaffNote(src) then
-        TriggerClientEvent('horror:notify', src, '~g~A Staff Note has been added to your account.', 6000)
+    if GiveNote(src, key) then
+        TriggerClientEvent('horror:notify', src, '~g~' .. NoteMessages[key], 6000)
         local stats = GetStats(src)
-        stats.staffNotes = stats.staffNotes + 1
+        local counter = NoteCounters[key]
+        stats[counter] = (stats[counter] or 0) + 1
         CheckTitles(src, stats, nil)
         SaveStats(src, stats)
     end
