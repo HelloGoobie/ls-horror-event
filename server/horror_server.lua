@@ -1,4 +1,4 @@
-local MinSecondsIntoRun = 30
+local MinSecondsIntoRun = 5
 local MinEscapeSeconds = 60
 local MaxCatches = 5
 local UseRoutingBuckets = true
@@ -287,10 +287,17 @@ RegisterNetEvent('horror:noteFound', function(key)
     if type(key) ~= 'string' or not NoteItems[key] then return end
     local run = runs[src]
     if not run or run.noteClaimed then return end
-    if os.time() - run.started < MinSecondsIntoRun then return end
+    if os.time() - run.started < MinSecondsIntoRun then
+        print(('[ls-horror] note %s ignored for %s: picked up within %ds of starting'):format(key, src, MinSecondsIntoRun))
+        TriggerClientEvent('horror:notify', src, '~r~Too quick - the note crumbles. Try again next run.', 5000)
+        return
+    end
 
     run.noteClaimed = true
-    if GiveNote(src, key) then
+    if not GiveNote(src, key) then
+        print(('[ls-horror] note %s could not be given to %s (vrp not running, or player has no user id)'):format(key, src))
+        TriggerClientEvent('horror:notify', src, '~r~The note could not be added to your inventory.', 5000)
+    else
         TriggerClientEvent('horror:notify', src, '~g~' .. NoteMessages[key], 6000)
         local stats = GetStats(src)
         local counter = NoteCounters[key]
