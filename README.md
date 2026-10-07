@@ -246,3 +246,21 @@ ls-horror/
 ## Credits
 
 Made by **Goobie**.
+
+## Monster voices
+
+Each monster model has its own pair of sounds, both generated from scratch (no samples, no
+copyright):
+
+| Model | Far (patrolling, intro, behind you) | Sees you (chase start, jumpscare range) |
+| --- | --- | --- |
+| `u_m_y_zombie_02` | Low shambling moan | Rasping scream |
+| `u_m_y_zombie_03` | Long wail | High shriek |
+| `u_m_y_zombie_04` | Deep rumbling growl | Heavy roar |
+| `u_m_y_zombie_05` | Howl | Bark and snarl |
+| `u_m_y_zombie_06` | Low snarling whine | Snarl and barks |
+
+Files are `html/far_zombie_XX.mp3` and `html/see_zombie_XX.mp3`. Replace one with your own
+file of the same name to change it. The "sees you" sounds share the 8 second screech
+cooldown and follow the scare volume setting. `Config.MonsterSounds` lists the models that
+use them; any model not listed falls back to the generic growls.

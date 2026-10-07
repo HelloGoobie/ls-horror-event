@@ -186,6 +186,14 @@ local Config = {
         },
     },
 
+    MonsterSounds = {
+        u_m_y_zombie_02 = true,
+        u_m_y_zombie_03 = true,
+        u_m_y_zombie_04 = true,
+        u_m_y_zombie_05 = true,
+        u_m_y_zombie_06 = true,
+    },
+
     Atmosphere = {
         CeilingLights     = true,
         LightRange        = 3.5,
@@ -452,12 +460,20 @@ end
 
 local DIFF_LABEL = { easy = 'Easy', hard = '~r~HARD~s~', extreme = '~p~EXTREME~s~' }
 
+local function MonsterSound(kind, fallback)
+    local key = selectedMonsterModelName and tostring(selectedMonsterModelName):lower()
+    if key and Config.MonsterSounds and Config.MonsterSounds[key] then
+        return kind .. '_' .. key
+    end
+    return fallback
+end
+
 local lastMonsterScreech = 0
 local function MonsterScreech(volume)
     local now = GetGameTimer()
     if now - lastMonsterScreech < (Config.Atmosphere.ScreechGapMs or 8000) then return false end
     lastMonsterScreech = now
-    SendNUIMessage({ action = "playSound", soundId = "screech", volume = volume })
+    SendNUIMessage({ action = "playSound", soundId = MonsterSound("see", "screech"), volume = volume })
     return true
 end
 
@@ -1010,7 +1026,7 @@ function PlayIntroCutscene(token, onComplete)
             NextShot(mCoords, function()
                 Cine("title", { text = "THE MORGUE", sub = "Strawberry, Los Santos  ·  00:00" })
                 Cine("caption", { kicker = "It is already here", text = "Something waits down here in the dark.", delay = 2600 })
-                SendNUIMessage({ action = "playSound", soundId = "growl_far", volume = 0.35 })
+                SendNUIMessage({ action = "playSound", soundId = MonsterSound("far", "growl_far"), volume = 0.35 })
                 local c = PushInShot({
                     subject = mCoords, lookAt = face, camHeight = quadrupedPeds[monsterPed] and 0.1 or 0.35,
                     far = 4.5, near = 2.0, durationMs = shotMs + 1200, ignore = monsterPed,
@@ -1699,7 +1715,7 @@ function StartProximitySoundLoop(token)
                         if dist2d < 12.0 then
                             SendNUIMessage({ action = "playSound", soundId = "growl_close", volume = 0.45 })
                         else
-                            SendNUIMessage({ action = "playSound", soundId = "growl_far", volume = 0.35 })
+                            SendNUIMessage({ action = "playSound", soundId = MonsterSound("far", "growl_far"), volume = 0.35 })
                         end
                         if aiState == "SEARCH" or aiState == "INVESTIGATE" then
                             nextGrowl = now + math.random(5000, 9000)
@@ -2006,7 +2022,7 @@ function StartAssistLoop(token)
             end
             if level > 0.45 and now >= nextBreath then
                 nextBreath = now + math.random(5000, 8000)
-                SendNUIMessage({ action = "playSound", soundId = "growl_far", volume = 0.08 + 0.12 * level })
+                SendNUIMessage({ action = "playSound", soundId = MonsterSound("far", "growl_far"), volume = 0.08 + 0.12 * level })
             end
 
             if not cutsceneActive then
