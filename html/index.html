@@ -753,10 +753,6 @@
             screech:     "monster-screech.mp3",
             jumpscare:   "jumpscare.mp3"
         };
-        ["02", "03", "04", "05", "06"].forEach(n => {
-            FILE_MAP["far_u_m_y_zombie_" + n] = "far_zombie_" + n + ".mp3";
-            FILE_MAP["see_u_m_y_zombie_" + n] = "see_zombie_" + n + ".mp3";
-        });
 
         let activeAudio = {};
 
@@ -859,8 +855,8 @@
                 case "stopHeartbeat": stopSound("heartbeat"); break;
 
                 case "playSound":
-                    if (ducked && !DUCK_ALLOWED[data.soundId] && !String(data.soundId).startsWith("see_") && !data.force) break;
-                    playSoundFile(data.soundId, data.loop || false, (data.volume ?? 1.0) * ((SCARY[data.soundId] || String(data.soundId).startsWith("see_")) ? scareVolume / 100 : 1), data.speed ?? 1.0, data.maxMs || 0);
+                    if (ducked && !DUCK_ALLOWED[data.soundId] && !data.force) break;
+                    playSoundFile(data.soundId, data.loop || false, (data.volume ?? 1.0) * (SCARY[data.soundId] ? scareVolume / 100 : 1), data.speed ?? 1.0, data.maxMs || 0);
                     break;
                 case "stopSound": stopSound(data.soundId); break;
                 case "stopAll":
