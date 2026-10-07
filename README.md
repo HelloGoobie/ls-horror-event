@@ -222,6 +222,39 @@ AddEventHandler('horror:titleEarned', function(source, id, name, colour) end)
 When a player is caught for the last time, the client also fires
 `horror:playerCaught`.
 
+### Image notes with sound (Transport Tycoon inventory)
+
+The inventory builds a note's menu entry from `note|Title|Body` and writes the title and
+body in with `innerHTML`, so plain HTML works in both parts. The description box is
+rebuilt every time the selection moves, which means anything inside the body starts when
+the player hovers the item and stops as soon as they move off it.
+
+The two notes are an image in the body, and for the tape, an iframe next to it that
+plays the audio:
+
+```
+note|Night Shift Log|<img src="https://YOUR-HOST/note_tape.png" style="width:100%"/><iframe width="1" height="1" frameborder="0" allow="autoplay" style="display:none" srcdoc="<audio autoplay src='https://YOUR-HOST/morgue_log.mp3'></audio>"></iframe>
+```
+
+- The iframe is 1x1 and hidden. Its `srcdoc` holds a single `<audio autoplay>` tag, so the
+  sound starts as soon as the description is drawn, the same way the existing YouTube
+  embed notes work. Use single quotes inside `srcdoc` so the outer double quotes are not
+  broken.
+- The same `<audio autoplay src=...>` tag, put straight into the note body without the
+  iframe, played correctly in the local test inventory. The iframe just wraps it the way
+  the YouTube embed notes do, so use whichever your inventory accepts; the iframe form
+  has not been tried on Transport Tycoon itself.
+- `morgue_log.mp3` is 22.5 seconds. It plays through in full as long as the player stays
+  on the item, and restarts if they move off and back on.
+- Files must be on a public HTTPS URL the player's game can reach (the same place the
+  existing note images are hosted). Give new files a new name when you replace them,
+  because the game's browser caches audio and images by URL.
+- The Morgue note is the same format with only the `<img>` and no iframe, so it stays
+  silent.
+- If the inventory shows the item id as an image (like `goobie`), that mapping is done on
+  the server side, so for these two items either add that mapping or use the
+  `note|...` form above.
+
 ## File structure
 
 ```
