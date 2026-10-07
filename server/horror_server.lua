@@ -3,7 +3,7 @@ local MinEscapeSeconds = 60
 local MaxCatches = 5
 local UseRoutingBuckets = true
 local BucketBase = 7000
-local StaffNoteItem = 'staff_note'
+local StaffNoteItem = 'goobie'
 local runs = {}
 local buckets = {}
 
