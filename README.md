@@ -182,9 +182,9 @@ summary for impossible numbers, keeps lifetime stats and awards rewards.
 | Title | Colour | Requirement |
 | --- | --- | --- |
 | Night Shift | `#7FB8A4` morgue teal | Enter the Morgue Horror Event |
-| Morgue Rat | `#C97B3D` rust | Escape the morgue x10 |
+| Morgue Rat | `#C97B3D` rust | Escape the morgue x50, on any difficulty |
 | Lost Property | `#D9B45A` old gold | Find every easter egg item |
-| Body Bag Dodger | `#6EC1E4` ice blue | Escape without being caught once |
+| Body Bag Dodger | `#6EC1E4` ice blue | Escape without being caught x20 on Easy, x30 on Hard or x50 on Extreme (counted per difficulty) |
 | The Unkillable | `#D7263D` blood red | Escape on Extreme without being caught |
 
 The list is the `Titles` table at the top of the server file.
@@ -209,7 +209,7 @@ Four functions are marked `TODO(Transport Tycoon)`:
 | `GiveTitle` | Your chat title unlock |
 | `GiveNote` | Already calls `vRP.tryGiveInventoryItem({user_id, item, 1})`; set the item IDs in `NoteItems` at the top of `server/horror_server.lua` (`morgue`, `morgue_tape`) |
 
-Until they're replaced, titles and Staff Notes are only printed in the server
+Until they're replaced, chat titles are only printed in the server
 console. Other resources can use:
 
 ```lua

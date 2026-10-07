@@ -40,8 +40,8 @@ end
 local Titles = {
     { id = 'night_shift',     name = 'Night Shift',     colour = '#7FB8A4', desc = 'Enter the Morgue Horror Event',
       check = function(s) return s.entered >= 1 end },
-    { id = 'morgue_rat',      name = 'Morgue Rat',      colour = '#C97B3D', desc = 'Escape the morgue x10',
-      check = function(s) return s.escapes >= 10 end },
+    { id = 'morgue_rat',      name = 'Morgue Rat',      colour = '#C97B3D', desc = 'Escape the morgue x50 on any difficulty',
+      check = function(s) return s.escapes >= 50 end },
     { id = 'lost_property',   name = 'Lost Property',   colour = '#D9B45A', desc = 'Find every easter egg item',
       check = function(s)
           for _, id in ipairs({ 'staffcard', 'batteries', 'teddy', 'stunpack', 'tape' }) do
@@ -49,8 +49,11 @@ local Titles = {
           end
           return true
       end },
-    { id = 'body_bag_dodger', name = 'Body Bag Dodger', colour = '#6EC1E4', desc = 'Escape without being caught once',
-      run = function(r) return r.escaped and r.caught == 0 end },
+    { id = 'body_bag_dodger', name = 'Body Bag Dodger', colour = '#6EC1E4', desc = 'Escape without being caught: x20 on Easy, x30 on Hard or x50 on Extreme',
+      check = function(s)
+          local c = s.cleanEscapes
+          return c.easy >= 20 or c.hard >= 30 or c.extreme >= 50
+      end },
     { id = 'the_unkillable',  name = 'The Unkillable',  colour = '#D7263D', desc = 'Escape on Extreme without being caught',
       run = function(r) return r.escaped and r.difficulty == 'extreme' and r.caught == 0 end },
 }
@@ -143,9 +146,12 @@ local function Defaults(s)
     s.fuses       = s.fuses or 0
     s.stuns       = s.stuns or 0
     s.lures       = s.lures or 0
-    s.staffNotes  = s.staffNotes or 0
     s.morgueNotes = s.morgueNotes or 0
     s.tapes       = s.tapes or 0
+    s.cleanEscapes = s.cleanEscapes or {}
+    s.cleanEscapes.easy    = s.cleanEscapes.easy or 0
+    s.cleanEscapes.hard    = s.cleanEscapes.hard or 0
+    s.cleanEscapes.extreme = s.cleanEscapes.extreme or 0
     s.items       = s.items or {}
     s.titles      = s.titles or {}
     s.best        = s.best or {}
@@ -287,6 +293,9 @@ RegisterNetEvent('horror:runEnded', function(summary)
         stats.escapes = stats.escapes + 1
         if r.difficulty ~= 'easy' then stats.hardEscapes = stats.hardEscapes + 1 end
         if r.difficulty == 'extreme' then stats.extremeEscapes = stats.extremeEscapes + 1 end
+        if r.caught == 0 and stats.cleanEscapes[r.difficulty] ~= nil then
+            stats.cleanEscapes[r.difficulty] = stats.cleanEscapes[r.difficulty] + 1
+        end
     end
     stats.caught = stats.caught + r.caught
     stats.fuses  = stats.fuses + r.fuses
