@@ -33,8 +33,7 @@ while an Outlast-style monster hunts them through the building.
   exit, spare batteries, a teddy that gives back a life, a taser stun pack or a
   lore tape. Each can be found once per run.
 - **Rare notes.** On top of the normal easter egg there is a small chance that the
-  hidden item is a note given by the server, on every difficulty: a Staff Note (5%),
-  The Morgue note (4%) or, very rarely, the Night Shift Log tape (0.5%). Only one note
+  hidden item is a note given by the server, on every difficulty: The Morgue note (4%) or, very rarely, the Night Shift Log tape (0.5%). Only one note
   can be found per run.
 - **Stats and chat titles.** The server keeps each player's lifetime stats and
   unlocks chat titles for milestones and challenge runs.
@@ -122,7 +121,7 @@ five catches, the event is over.
 | `/horrorspot` | Add a hiding spot where you're standing, facing the way you want to peek |
 | `/horrorspot low` | Same, for under-a-bed style spots |
 | `/horroreggspot` | Add an easter egg spot where you're standing |
-| `/horrorforcenote staff|morgue|tape|off` | Debug: force the next run to hide that note |
+| `/horrorforcenote morgue / tape / off` | Debug: force the next run to hide that note |
 | `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
 | `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
 | `/horrordragtest` | Testing only, with `/horrordebug` on: replay the caught cutscene with the nearest monster |
@@ -219,7 +218,7 @@ Four functions are marked `TODO(Transport Tycoon)`:
 | `PlayerKey` | Your player ID (for example the vRP user ID) |
 | `LoadStats`, `SaveStats` | Your own storage. By default, stats are saved in resource KVP |
 | `GiveTitle` | Your chat title unlock |
-| `GiveNote` | Already calls `vRP.tryGiveInventoryItem({user_id, item, 1})`; set the item IDs in `NoteItems` at the top of `server/horror_server.lua` (`goobie`, `morgue`, `morgue_tape`) |
+| `GiveNote` | Already calls `vRP.tryGiveInventoryItem({user_id, item, 1})`; set the item IDs in `NoteItems` at the top of `server/horror_server.lua` (`morgue`, `morgue_tape`) |
 
 Until they're replaced, titles and Staff Notes are only printed in the server
 console. Other resources can use:

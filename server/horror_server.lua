@@ -4,12 +4,10 @@ local MaxCatches = 5
 local UseRoutingBuckets = true
 local BucketBase = 7000
 local NoteItems = {
-    staff  = 'goobie',
     morgue = 'morgue',
     tape   = 'morgue_tape',
 }
 local NoteMessages = {
-    staff  = 'A Staff Note has been added to your account.',
     morgue = 'The Morgue note has been added to your account.',
     tape   = 'A tape has been added to your account.',
 }
@@ -57,7 +55,7 @@ local Titles = {
       run = function(r) return r.escaped and r.difficulty == 'extreme' and r.caught == 0 end },
 }
 
-local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, staffnote = true, morgue_note = true, morgue_tape = true }
+local ValidItems = { staffcard = true, batteries = true, teddy = true, stunpack = true, tape = true, morgue_note = true, morgue_tape = true }
 
 -- ============================================================
 -- TRANSPORT TYCOON HOOKS
@@ -271,7 +269,7 @@ RegisterNetEvent('horror:runEnded', function(summary)
     stats.fuses  = stats.fuses + r.fuses
     stats.stuns  = stats.stuns + r.stuns
     stats.lures  = stats.lures + r.lures
-    if r.item and r.item ~= 'staffnote' and r.item ~= 'morgue_note' and r.item ~= 'morgue_tape' then
+    if r.item and r.item ~= 'morgue_note' and r.item ~= 'morgue_tape' then
         stats.items[r.item] = (stats.items[r.item] or 0) + 1
     end
 
@@ -282,7 +280,7 @@ RegisterNetEvent('horror:runEnded', function(summary)
     TriggerClientEvent('horror:runResult', src, result)
 end)
 
-local NoteCounters = { staff = 'staffNotes', morgue = 'morgueNotes', tape = 'tapes' }
+local NoteCounters = { morgue = 'morgueNotes', tape = 'tapes' }
 
 RegisterNetEvent('horror:noteFound', function(key)
     local src = source

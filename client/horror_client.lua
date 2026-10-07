@@ -293,11 +293,6 @@ local Config = {
                 item = { id = 'morgue_note', note = 'morgue', label = 'The Morgue note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
                          text = 'A note left behind in the morgue. It has been added to your inventory.', effect = 'servernote' },
             },
-            {
-                enabled = true, chance = 0.05,
-                item = { id = 'staffnote', note = 'staff', label = 'Staff Note', models = { 'prop_cs_documents_01', 'p_amb_clipboard_01', 'prop_notepad_01' },
-                         text = 'A Staff Note, tucked away where nobody would look. Lucky you.', effect = 'servernote' },
-            },
         },
         items = {
             { id = 'staffcard', label = 'Staff key card', models = { 'p_ld_id_card_01', 'prop_cs_swipe_card', 'p_ld_id_card_002' },
@@ -2483,11 +2478,11 @@ RegisterCommand('horrorforcenote', function(_, args)
     if key == 'off' or not key then
         debugForcedNote = nil
         ShowNotification("Forced note cleared.", 3000)
-    elseif key == 'staff' or key == 'morgue' or key == 'tape' then
+    elseif key == 'morgue' or key == 'tape' then
         debugForcedNote = key
         ShowNotification(("The next run will hide the %s note."):format(key), 4000)
     else
-        ShowNotification("Use /horrorforcenote staff, morgue, tape or off.", 4000)
+        ShowNotification("Use /horrorforcenote morgue, tape or off.", 4000)
     end
 end, false)
 
