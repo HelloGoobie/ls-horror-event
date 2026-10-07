@@ -4157,6 +4157,7 @@ function EndHorrorEvent(escaped, silent, message)
         caught = timesCaught, maxCatches = MaxCatches(),
         fuses = fusesCollected, fusesNeeded = totalFusesRequired,
         item = (eggFound and eggItem) and eggItem.label or nil,
+        noteImage = (eggFound and eggItem and eggItem.effect == 'servernote' and (eggItem.note == 'morgue' or eggItem.note == 'tape')) and eggItem.note or nil,
         stuns = summary.stuns or 0, lures = summary.lures or 0,
         debug = summary.debug == true,
     }
