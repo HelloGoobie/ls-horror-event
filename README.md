@@ -125,7 +125,7 @@ five catches, the event is over.
 | `/horrorstats` | Show your lifetime stats and the titles you've unlocked |
 | `/horrortop [easy\|hard\|extreme]` | Show the five fastest escapes for a difficulty |
 | `/horrordragtest` | Testing only, with `/horrordebug` on: replay the caught cutscene with the nearest monster |
-| `/horrordebug` | Testing only: the monsters ignore you, and hiding and egg spots are shown as markers. Runs with debug on don't count towards stats or rewards |
+| `/horrordebug` | Testing only: the monsters ignore you, and hiding spots, working fuses (green) and dead fuses (red) and the hidden easter egg are shown as labelled markers. Runs with debug on don't count towards stats or rewards |
 
 `/horrorspot` and `/horroreggspot` add the spot for the current session and
 print a line in the F8 console. Paste it into `Config.HidingSpots` or

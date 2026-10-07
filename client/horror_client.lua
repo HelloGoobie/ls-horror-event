@@ -2485,6 +2485,20 @@ RegisterCommand('horrordebug', function()
     end
 end, false)
 
+function DebugText3D(x, y, z, text)
+    local onScreen, sx, sy = World3dToScreen2d(x, y, z)
+    if not onScreen then return end
+    SetTextScale(0.0, 0.32)
+    SetTextFont(4)
+    SetTextProportional(true)
+    SetTextColour(255, 255, 255, 230)
+    SetTextOutline()
+    SetTextCentre(true)
+    BeginTextCommandDisplayText("STRING")
+    AddTextComponentSubstringPlayerName(text)
+    EndTextCommandDisplayText(sx, sy)
+end
+
 function StartDebugMarkerLoop()
     CreateThread(function()
         while debugGhost do
@@ -2501,9 +2515,18 @@ function StartDebugMarkerLoop()
                         0.5, 0.5, 0.6, 255, 210, 40, 160, false, false, 2, false, nil, nil, false)
                 end
             end
-            if eggPos and not eggFound and #(eggPos - p) < 40.0 then
-                DrawMarker(2, eggPos.x, eggPos.y, eggPos.z + 0.6, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0,
-                    0.3, 0.3, 0.3, 255, 120, 0, 200, true, false, 2, false, nil, nil, false)
+            for i, pos in ipairs(activeFuseCoords) do
+                if clueObjects[i] and DoesEntityExist(clueObjects[i]) then
+                    local real = realFuseIndices[i]
+                    DrawMarker(2, pos.x, pos.y, pos.z + 1.1, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0,
+                        0.35, 0.35, 0.35, real and 60 or 255, real and 255 or 40, real and 80 or 40, 220, true, false, 2, false, nil, nil, false)
+                    DebugText3D(pos.x, pos.y, pos.z + 1.5, real and "~g~WORKING FUSE" or "~r~dead fuse")
+                end
+            end
+            if eggPos and not eggFound then
+                DrawMarker(2, eggPos.x, eggPos.y, eggPos.z + 0.9, 0.0, 0.0, 0.0, 180.0, 0.0, 0.0,
+                    0.4, 0.4, 0.4, 255, 120, 0, 230, true, false, 2, false, nil, nil, false)
+                DebugText3D(eggPos.x, eggPos.y, eggPos.z + 1.3, "~o~EASTER EGG" .. (eggItem and eggItem.label and (" - " .. eggItem.label) or ""))
             end
             Wait(0)
         end
