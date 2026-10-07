@@ -86,10 +86,21 @@ end
 local vRP
 local function GetVRP()
     if vRP then return vRP end
+    if type(module) ~= 'function' then
+        print('[ls-horror] "module" is not defined - @vrp/lib/utils.lua did not load (is the vrp resource started?)')
+        return nil
+    end
     local ok, proxy = pcall(function() return module("vrp", "lib/Proxy") end)
-    if not ok or not proxy then return nil end
+    if not ok or not proxy then
+        print('[ls-horror] could not load vrp lib/Proxy: ' .. tostring(proxy))
+        return nil
+    end
     local ok2, iface = pcall(function() return proxy.getInterface("vRP") end)
-    if ok2 then vRP = iface end
+    if not ok2 or not iface then
+        print('[ls-horror] could not get the vRP interface: ' .. tostring(iface))
+        return nil
+    end
+    vRP = iface
     return vRP
 end
 
@@ -97,13 +108,23 @@ local function GiveNote(src, key)
     local itemId = NoteItems[key]
     if not itemId then return false end
     local v = GetVRP()
-    if not v then
-        print(('[HORROR] Note "%s" found by %s (%d) - vRP not found, nothing was given'):format(key, GetPlayerName(src) or '?', src))
+    if not v then return false end
+    local ok, userId = pcall(function() return v.getUserId({src}) end)
+    if not ok then
+        print('[ls-horror] vRP.getUserId errored: ' .. tostring(userId))
         return false
     end
-    local userId = v.getUserId({src})
-    if not userId then return false end
-    v.tryGiveInventoryItem({userId, itemId, 1})
+    if not userId then
+        print(('[ls-horror] vRP.getUserId returned nothing for source %s - vrp may have been restarted after ls-horror, restart ls-horror too'):format(tostring(src)))
+        vRP = nil
+        return false
+    end
+    local ok2, err = pcall(function() v.tryGiveInventoryItem({userId, itemId, 1}) end)
+    if not ok2 then
+        print('[ls-horror] vRP.tryGiveInventoryItem errored: ' .. tostring(err))
+        return false
+    end
+    print(('[ls-horror] gave %s (%s) to user %s'):format(itemId, key, tostring(userId)))
     return true
 end
 
